@@ -1344,9 +1344,17 @@ export const addGorev = async (gorev: Omit<Gorev, 'id' | 'user_id' | 'created_at
     return newGorev;
   }
   const uid = await getUserIdOrThrow();
+  // Strip auto-generated / forbidden fields that shouldn't be sent on INSERT
+  const { id: _id, user_id: _uid, created_at: _cat, ...cleanGorev } = gorev as any;
+  const payload = {
+    ...cleanGorev,
+    user_id: uid,
+    // Convert empty string proje_id to null (UUID foreign key can't be empty string)
+    proje_id: cleanGorev.proje_id || null,
+  };
   const { data, error } = await supabase
     .from('gorevler')
-    .insert([{ ...gorev, user_id: uid }])
+    .insert([payload])
     .select()
     .single();
   if (error) throw error;
@@ -1368,9 +1376,16 @@ export const updateGorev = async (id: string, gorev: Partial<Gorev>): Promise<Go
     saveLocalDB(db);
     return updated;
   }
+  // Strip forbidden fields from the update payload
+  const { id: _id, user_id: _uid, created_at: _cat, ...cleanGorev } = gorev as any;
+  const payload = {
+    ...cleanGorev,
+    // Convert empty string proje_id to null
+    ...(cleanGorev.proje_id !== undefined ? { proje_id: cleanGorev.proje_id || null } : {}),
+  };
   const { data, error } = await supabase
     .from('gorevler')
-    .update(gorev)
+    .update(payload)
     .eq('id', id)
     .select()
     .single();

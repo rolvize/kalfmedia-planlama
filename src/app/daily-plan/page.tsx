@@ -104,8 +104,9 @@ export default function DailyPlanPage() {
       }
       setModalOpen(false);
       loadData();
-    } catch (e) {
-      alert("Görev kaydedilemedi: " + e);
+    } catch (e: any) {
+      const msg = e?.message || e?.details || JSON.stringify(e) || "Bilinmeyen hata";
+      alert("Görev kaydedilemedi: " + msg);
     }
   };
 
