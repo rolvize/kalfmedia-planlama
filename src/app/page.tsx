@@ -123,7 +123,7 @@ export default function LandingPage() {
   };
 
   // Kullanıcı Adı ve Şifre Giriş İşlemi
-  const handlePasswordLogin = (e: React.FormEvent) => {
+  const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!usernameInput.trim() || !passwordInput) return;
 
@@ -133,22 +133,122 @@ export default function LandingPage() {
     const normalizedUsername = usernameInput.trim().toLowerCase();
     const matchesPassword = passwordInput === "@Yeturko2257." || passwordInput === "@Yeturko2257";
 
-    if (normalizedUsername === "yeturk" && matchesPassword) {
+    // 1. DURUM: Eğer Supabase anahtarları yoksa veya çevrimdışı çalışılıyorsa (Demo Modu)
+    if (isDemo) {
+      if (normalizedUsername === "yeturk" && matchesPassword) {
+        if (typeof window !== "undefined") {
+          localStorage.setItem("demo_session", "true");
+          localStorage.setItem("demo_username", "Yetürk");
+        }
+        setAuthMessage({
+          type: "success",
+          text: "Demo moduna başarıyla giriş yapıldı! Yönlendiriliyorsunuz..."
+        });
+        setTimeout(() => {
+          router.push("/dashboard");
+        }, 600);
+      } else {
+        setAuthMessage({
+          type: "error",
+          text: "Hatalı kullanıcı adı veya şifre!"
+        });
+        setLoading(false);
+      }
+      return;
+    }
+
+    // 2. DURUM: Canlı Supabase Modu Aktifse
+    try {
+      // Yetürk için arka planda yeturk@kalfmedia.com adresini eşleştir
+      let emailToUse = "";
+      if (normalizedUsername === "yeturk") {
+        emailToUse = "yeturk@kalfmedia.com";
+      } else if (normalizedUsername.includes("@")) {
+        emailToUse = normalizedUsername; // E-posta girildiyse direkt kullan
+      } else {
+        emailToUse = `${normalizedUsername}@kalfmedia.com`;
+      }
+
+      // Supabase üzerinden şifre ile giriş yapmayı dene
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: emailToUse,
+        password: passwordInput,
+      });
+
+      if (error) {
+        // Eğer kullanıcı henüz canlı veritabanında yoksa ve Yeturk/şifre doğruysa otomatik kayıt et
+        const isInvalidCredentials = 
+          error.message.includes("Invalid login credentials") || 
+          error.message.toLowerCase().includes("invalid");
+
+        if (isInvalidCredentials && normalizedUsername === "yeturk" && matchesPassword) {
+          setAuthMessage({
+            type: "success",
+            text: "Canlı veritabanınızda Yetürk hesabı oluşturuluyor..."
+          });
+
+          // Otomatik Kayıt (Sign Up)
+          const { error: signUpError } = await supabase.auth.signUp({
+            email: emailToUse,
+            password: passwordInput,
+            options: {
+              data: {
+                full_name: "Yetürk",
+              }
+            }
+          });
+
+          if (signUpError) {
+            // E-posta doğrulaması kapatılmadıysa bu uyarıyı ver
+            if (signUpError.message.includes("email confirmation")) {
+              throw new Error("Canlı hesaba kayıt yapıldı ancak Supabase panelinde 'Confirm email' ayarı açık olduğu için e-posta doğrulaması gerekiyor. Lütfen bu ayarı kapatın veya e-postanızı kontrol edin.");
+            }
+            throw signUpError;
+          }
+
+          // Kayıt sonrası otomatik giriş
+          const { error: secondLoginError } = await supabase.auth.signInWithPassword({
+            email: emailToUse,
+            password: passwordInput,
+          });
+
+          if (secondLoginError) throw secondLoginError;
+
+          if (typeof window !== "undefined") {
+            localStorage.removeItem("demo_session");
+            localStorage.removeItem("demo_username");
+          }
+          
+          setAuthMessage({
+            type: "success",
+            text: "Canlı hesabınız oluşturuldu ve giriş yapıldı! Yönlendiriliyorsunuz..."
+          });
+          setTimeout(() => {
+            router.push("/dashboard");
+          }, 600);
+          return;
+        }
+
+        throw error;
+      }
+
+      // Giriş başarılıysa demo modunu kaldır ve yönlendir
       if (typeof window !== "undefined") {
-        localStorage.setItem("demo_session", "true");
-        localStorage.setItem("demo_username", "Yetürk");
+        localStorage.removeItem("demo_session");
+        localStorage.removeItem("demo_username");
       }
       setAuthMessage({
         type: "success",
-        text: "Başarıyla giriş yapıldı! Yönlendiriliyorsunuz..."
+        text: "Canlı hesabınıza başarıyla giriş yapıldı! Yönlendiriliyorsunuz..."
       });
       setTimeout(() => {
         router.push("/dashboard");
       }, 600);
-    } else {
+
+    } catch (err: any) {
       setAuthMessage({
         type: "error",
-        text: "Hatalı kullanıcı adı veya şifre!"
+        text: err.message || "Giriş yaparken hata oluştu."
       });
       setLoading(false);
     }
