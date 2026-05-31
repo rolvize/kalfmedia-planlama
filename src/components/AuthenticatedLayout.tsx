@@ -23,8 +23,7 @@ import {
   Camera,
   Sun,
   Moon,
-  Layers,
-  Pen
+  Layers
 } from "lucide-react";
 
 export default function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
@@ -124,7 +123,6 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
       case "/finance": return "Gelir Gider Yönetimi";
       case "/clients": return "Müşteri Portföyü";
       case "/calendar": return "Çalışma Takvimi";
-      case "/imla-kontrolu": return "İmla Kontrolü / Editör";
       case "/settings": return "Sistem Ayarları";
       default: return "KalfMedia Planlama";
     }
@@ -162,7 +160,6 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
     { id: "dashboard", label: "Finansal Özet", path: "/dashboard", icon: <LayoutDashboard size={18} strokeWidth={1.5} /> },
     { id: "finance", label: "Gelir Gider Yönetimi", path: "/finance", icon: <ArrowRightLeft size={18} strokeWidth={1.5} /> },
     { id: "equipment", label: "Ekipman Yönetimi", path: "/equipment", icon: <Camera size={18} strokeWidth={1.5} /> },
-    { id: "imla-kontrolu", label: "İmla Kontrolü", path: "/imla-kontrolu", icon: <Pen size={18} strokeWidth={1.5} /> },
     { id: "calendar", label: "Takvim", path: "/calendar", icon: <Calendar size={18} strokeWidth={1.5} /> },
     { id: "settings", label: "Ayarlar", path: "/settings", icon: <Settings size={18} strokeWidth={1.5} /> }
   ];

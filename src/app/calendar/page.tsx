@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import AuthenticatedLayout from "../../components/AuthenticatedLayout";
-import { getCalendarEvents, addCalendarEvent, deleteCalendarEvent, getProjects } from "../../lib/supabase/db";
-import { CalendarEvent, Project } from "../../types";
+import { getCalendarEvents, addCalendarEvent, deleteCalendarEvent, getProjects, getGorevler } from "../../lib/supabase/db";
+import { CalendarEvent, Project, Gorev } from "../../types";
 import {
   ChevronLeft,
   ChevronRight,
@@ -21,6 +21,7 @@ import {
   MapPin,
   CheckCircle,
   Filter,
+  CheckSquare,
 } from "lucide-react";
 
 const AYLAR = [
@@ -36,7 +37,8 @@ const EVENT_TYPES = [
   { id: "Teslim", label: "Teslim / Deadline", color: "text-red-400 border-red-500/20 bg-red-500/5", bullet: "bg-red-400" },
   { id: "Toplantı", label: "Toplantı / Görüşme", color: "text-blue-400 border-blue-500/20 bg-blue-500/5", bullet: "bg-blue-400" },
   { id: "Ödeme", label: "Ödeme Günü", color: "text-amber-400 border-amber-500/20 bg-amber-500/5", bullet: "bg-amber-400" },
-  { id: "Başlangıç", label: "Proje Başlangıcı", color: "text-emerald-400 border-emerald-500/20 bg-emerald-500/5", bullet: "bg-emerald-400" }
+  { id: "Başlangıç", label: "Proje Başlangıcı", color: "text-emerald-400 border-emerald-500/20 bg-emerald-500/5", bullet: "bg-emerald-400" },
+  { id: "Görev", label: "Gündelik Görev", color: "text-cyan-400 border-cyan-500/20 bg-cyan-500/5", bullet: "bg-cyan-400" },
 ];
 
 const EVENT_COLORS: { [key: string]: { bg: string; text: string; border: string; glow: string } } = {
@@ -44,13 +46,15 @@ const EVENT_COLORS: { [key: string]: { bg: string; text: string; border: string;
   "Teslim": { bg: "bg-rose-500/10", text: "text-rose-400", border: "border-rose-500/20", glow: "shadow-rose-500/10" },
   "Çekim": { bg: "bg-purple-500/10", text: "text-purple-400", border: "border-purple-500/20", glow: "shadow-purple-500/10" },
   "Toplantı": { bg: "bg-blue-500/10", text: "text-blue-400", border: "border-blue-500/20", glow: "shadow-blue-500/10" },
-  "Ödeme": { bg: "bg-amber-500/10", text: "text-amber-400", border: "border-amber-500/20", glow: "shadow-amber-500/10" }
+  "Ödeme": { bg: "bg-amber-500/10", text: "text-amber-400", border: "border-amber-500/20", glow: "shadow-amber-500/10" },
+  "Görev": { bg: "bg-cyan-500/10", text: "text-cyan-400", border: "border-cyan-500/20", glow: "shadow-cyan-500/10" },
 };
 
 export default function CalendarPage() {
   const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [gorevler, setGorevler] = useState<Gorev[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
   
   // Filtreler
@@ -70,10 +74,14 @@ export default function CalendarPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const evs = await getCalendarEvents();
-      const prjs = await getProjects();
+      const [evs, prjs, grvs] = await Promise.all([
+        getCalendarEvents(),
+        getProjects(),
+        getGorevler()
+      ]);
       setEvents(evs);
       setProjects(prjs);
+      setGorevler(grvs);
     } catch (e: any) {
       console.error(e);
     } finally {
@@ -178,20 +186,28 @@ export default function CalendarPage() {
     }
   };
 
-  // Günün etkinliklerini çek
+  // Günün etkinliklerini çek — takvim etkinlikleri + proje tarihleri + görevler
   const getEventsForDate = (dateStr: string) => {
     const list: any[] = [];
-    
-    // 1. Manuel Takvim Etkinlikleri
+    // Daha önce eklenmiş görev ID'lerini takip et (duplikasyon önleme)
+    const addedGorevTitles = new Set<string>();
+
+    // 1. Manuel Takvim Etkinlikleri (calendar_events tablosu)
     events.forEach(ev => {
       if (ev.start_date.split("T")[0] === dateStr) {
         list.push({ ...ev, source: "event" });
+        // Görev tipindeyse duplikasyon önleme için kaydet
+        if (ev.event_type === "Görev") {
+          addedGorevTitles.add(ev.title);
+        }
       }
     });
 
-    // 2. Dinamik Proje Tarihleri (Örnek: Çekim veya teslim günleri)
+    // 2. Dinamik Proje Tarihleri (start_date / due_date)
+    //    Sadece takvim etkinliği olarak kaydedilmemiş projeleri göster
+    const projectIdsWithCalEvents = new Set(events.filter(e => e.project_id).map(e => e.project_id));
     projects.forEach(p => {
-      if (p.due_date === dateStr) {
+      if (p.due_date === dateStr && !projectIdsWithCalEvents.has(p.id)) {
         list.push({
           id: `prj-due-${p.id}`,
           title: `TESLİM: ${p.title}`,
@@ -200,13 +216,29 @@ export default function CalendarPage() {
           project: p
         });
       }
-      if (p.start_date === dateStr) {
+      if (p.start_date === dateStr && !projectIdsWithCalEvents.has(p.id)) {
         list.push({
           id: `prj-start-${p.id}`,
           title: `BAŞLANGIÇ: ${p.title}`,
           event_type: "Başlangıç",
           source: "project",
           project: p
+        });
+      }
+    });
+
+    // 3. Gündelik Plan Görevleri (planlanan_tarih bazlı)
+    //    Takvim etkinliği olarak zaten kaydedilmemişse ekle (duplikasyon önleme)
+    gorevler.forEach(g => {
+      if (g.planlanan_tarih === dateStr && !addedGorevTitles.has(g.gorev_adi)) {
+        list.push({
+          id: `grv-${g.id}`,
+          title: g.gorev_adi,
+          event_type: "Görev",
+          source: "gorev",
+          gorev: g,
+          project_id: g.proje_id || null,
+          sutun: g.sutun_durumu
         });
       }
     });
@@ -239,23 +271,35 @@ export default function CalendarPage() {
     const todayStr = new Date().toISOString().split("T")[0];
     setSelectedDayStr(todayStr);
     setSelectedDayEvents(getEventsForDate(todayStr));
-  }, [events, projects, activeTypeFilter]);
+  }, [events, projects, gorevler, activeTypeFilter]);
 
   const handleDaySelect = (dateStr: string) => {
     setSelectedDayStr(dateStr);
     setSelectedDayEvents(getEventsForDate(dateStr));
   };
 
-  const getProjectName = (projectId: string | null) => {
-    if (!projectId) return "Genel";
+  const getProjectName = (projectId: string | null | undefined) => {
+    if (!projectId) return null;
     const p = projects.find(prj => prj.id === projectId);
-    return p ? p.title : "Bilinmeyen Proje";
+    return p ? p.title : null;
   };
 
   const formatLongDate = (dateStr: string) => {
     if (!dateStr) return "";
     const d = new Date(dateStr);
     return d.toLocaleDateString("tr-TR", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  };
+
+  // Görev durum rengi
+  const getGorevStatusColor = (sutun: string) => {
+    const map: Record<string, string> = {
+      "Tamamlandı": "text-emerald-400",
+      "Yapılıyor": "text-purple-400",
+      "Test": "text-cyan-400",
+      "Yapılacaklar": "text-blue-400",
+      "Yapılmayı Bekleyenler": "text-amber-400"
+    };
+    return map[sutun] || "text-slate-400";
   };
 
   return (
@@ -270,7 +314,7 @@ export default function CalendarPage() {
             </div>
             <div>
               <h1 className="text-2xl font-black">Planlama Takvimi</h1>
-              <p className="text-xs text-slate-400">Çekim günleri, teslim tarihleri ve müşteri toplantıları</p>
+              <p className="text-xs text-slate-400">Projeler, görevler, çekim günleri ve müşteri toplantıları</p>
             </div>
           </div>
 
@@ -348,7 +392,7 @@ export default function CalendarPage() {
               {/* Gün Hücreleri */}
               <div className="grid grid-cols-7 bg-slate-950/15">
                 {allCalendarDays.map((cell, idx) => {
-                  const events = getEventsForDate(cell.dateString);
+                  const dayEvents = getEventsForDate(cell.dateString);
                   const isToday = new Date().toISOString().split("T")[0] === cell.dateString;
                   const isSelected = selectedDayStr === cell.dateString;
 
@@ -378,14 +422,15 @@ export default function CalendarPage() {
 
                       {/* Günün Etkinlikleri - Masaüstü */}
                       <div className="hidden md:flex flex-col gap-1 overflow-y-auto max-h-[70px] pr-0.5 scrollbar-thin">
-                        {events.map((ev, evIdx) => {
+                        {dayEvents.map((ev, evIdx) => {
                           const colors = EVENT_COLORS[ev.event_type] || { bg: "bg-slate-800/60", text: "text-slate-400", border: "border-slate-800" };
 
                           return (
                             <div 
                               key={evIdx}
-                              className={`p-1 rounded-lg text-[9px] font-extrabold flex items-center justify-between border select-none transition-all hover:brightness-110 shadow-sm ${colors.bg} ${colors.text} ${colors.border}`}
+                              className={`p-1 rounded-lg text-[9px] font-extrabold flex items-center gap-1 border select-none transition-all hover:brightness-110 shadow-sm ${colors.bg} ${colors.text} ${colors.border}`}
                             >
+                              {ev.event_type === "Görev" && <CheckSquare size={8} className="shrink-0" />}
                               <span className="truncate pr-0.5" title={ev.title}>{ev.title}</span>
                             </div>
                           );
@@ -394,7 +439,7 @@ export default function CalendarPage() {
 
                       {/* Günün Etkinlikleri - Mobil Mermi Noktaları */}
                       <div className="flex flex-wrap gap-0.5 mt-auto justify-center md:hidden">
-                        {events.map((ev, evIdx) => {
+                        {dayEvents.map((ev, evIdx) => {
                           const typeInfo = EVENT_TYPES.find(t => t.id === ev.event_type);
                           const bulletColor = typeInfo?.bullet || "bg-slate-400";
                           return (
@@ -432,7 +477,7 @@ export default function CalendarPage() {
                   </div>
                   <div className="flex flex-col gap-1">
                     <span className="text-xs font-bold text-slate-400">Herhangi Bir Etkinlik Yok</span>
-                    <span className="text-[10px] text-slate-500 leading-relaxed px-4">Bu tarihe ait bir çekim, teslim, toplantı veya özel not eklenmemiş.</span>
+                    <span className="text-[10px] text-slate-500 leading-relaxed px-4">Bu tarihe ait bir çekim, teslim, toplantı, görev veya özel not eklenmemiş.</span>
                   </div>
                 </div>
               ) : (
@@ -440,6 +485,8 @@ export default function CalendarPage() {
                   {selectedDayEvents.map((ev) => {
                     const colors = EVENT_COLORS[ev.event_type] || { bg: "bg-slate-800/60", text: "text-slate-400", border: "border-slate-800" };
                     const isManualEvent = ev.source === "event";
+                    const isGorev = ev.source === "gorev";
+                    const projectName = getProjectName(ev.project_id);
 
                     return (
                       <div 
@@ -448,7 +495,8 @@ export default function CalendarPage() {
                       >
                         <div className="flex justify-between items-start gap-4">
                           <div className="flex flex-col gap-1 min-w-0">
-                            <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border bg-slate-950/60 w-max border-slate-800">
+                            <span className={`text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border bg-slate-950/60 w-max border-slate-800 flex items-center gap-1 ${colors.text}`}>
+                              {ev.event_type === "Görev" && <CheckSquare size={8} />}
                               {ev.event_type}
                             </span>
                             <h4 className="font-bold text-xs text-slate-200 leading-snug break-words mt-1">{ev.title}</h4>
@@ -465,15 +513,23 @@ export default function CalendarPage() {
                           )}
                         </div>
 
-                        {/* İlişkili Proje / Ekstra Bilgiler */}
+                        {/* Ek Bilgiler */}
                         <div className="flex flex-col gap-1 text-[10px] text-slate-400 border-t border-slate-800/40 pt-2.5 mt-0.5">
-                          {ev.project_id && (
+                          {projectName && (
                             <div className="flex items-center gap-1.5">
                               <Briefcase size={11} className="text-slate-500" />
-                              <span className="font-semibold truncate">İş: {getProjectName(ev.project_id)}</span>
+                              <span className="font-semibold truncate">Proje: {projectName}</span>
                             </div>
                           )}
-                          {!isManualEvent && ev.project?.client_id && (
+                          {isGorev && ev.sutun && (
+                            <div className="flex items-center gap-1.5">
+                              <CheckCircle size={11} className="text-slate-500" />
+                              <span className={`font-semibold ${getGorevStatusColor(ev.sutun)}`}>
+                                {ev.sutun}
+                              </span>
+                            </div>
+                          )}
+                          {!isManualEvent && !isGorev && ev.project?.client_id && (
                             <div className="flex items-center gap-1.5">
                               <MapPin size={11} className="text-slate-500" />
                               <span className="truncate">Proje Bağlantılı</span>

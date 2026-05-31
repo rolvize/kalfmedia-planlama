@@ -590,6 +590,37 @@ export const addProject = async (project: Omit<Project, 'id' | 'user_id' | 'crea
     .select()
     .single();
   if (error) throw error;
+
+  // Projeyi takvime de ekle (başlangıç + teslim tarihleri)
+  if (data) {
+    const calEvents = [];
+    if (payload.start_date) {
+      calEvents.push({
+        user_id: uid,
+        project_id: data.id,
+        title: `${payload.title} Başlangıcı`,
+        event_type: 'Başlangıç',
+        start_date: `${payload.start_date}T09:00:00Z`,
+        end_date: `${payload.start_date}T18:00:00Z`
+      });
+    }
+    if (payload.due_date) {
+      calEvents.push({
+        user_id: uid,
+        project_id: data.id,
+        title: `${payload.title} Teslimi`,
+        event_type: 'Teslim',
+        start_date: `${payload.due_date}T17:00:00Z`,
+        end_date: `${payload.due_date}T18:00:00Z`
+      });
+    }
+    if (calEvents.length > 0) {
+      try {
+        await supabase.from('calendar_events').insert(calEvents);
+      } catch (_) { /* Takvim hatası proje kaydını engellemesin */ }
+    }
+  }
+
   return data;
 };
 
@@ -1414,6 +1445,19 @@ export const addGorev = async (gorev: Omit<Gorev, 'id' | 'user_id' | 'created_at
       created_at: new Date().toISOString()
     };
     db.gorevler.push(newGorev);
+    // Demo modda da takvim etkinliği ekle
+    if (newGorev.planlanan_tarih) {
+      if (!db.calendar_events) db.calendar_events = [];
+      db.calendar_events.push({
+        id: `EV-GRV-${newGorev.id}`,
+        user_id: "USER-01",
+        title: newGorev.gorev_adi,
+        event_type: "Görev",
+        start_date: `${newGorev.planlanan_tarih}T09:00:00Z`,
+        end_date: `${newGorev.planlanan_tarih}T10:00:00Z`,
+        project_id: newGorev.proje_id || null
+      });
+    }
     saveLocalDB(db);
     return newGorev;
   }
@@ -1432,6 +1476,21 @@ export const addGorev = async (gorev: Omit<Gorev, 'id' | 'user_id' | 'created_at
     .select()
     .single();
   if (error) throw error;
+  
+  // Görev eklenince takvimde de göster
+  if (data && payload.planlanan_tarih) {
+    try {
+      await supabase.from('calendar_events').insert([{
+        user_id: uid,
+        title: payload.gorev_adi,
+        event_type: 'Görev',
+        start_date: `${payload.planlanan_tarih}T09:00:00Z`,
+        end_date: `${payload.planlanan_tarih}T10:00:00Z`,
+        project_id: payload.proje_id || null
+      }]);
+    } catch (_) { /* Takvim hatası görev kaydını engellemesin */ }
+  }
+  
   return data;
 };
 
