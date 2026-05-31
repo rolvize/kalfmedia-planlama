@@ -74,7 +74,7 @@ export default function CalendarPage() {
       const prjs = await getProjects();
       setEvents(evs);
       setProjects(prjs);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
     } finally {
       setLoading(false);
@@ -160,8 +160,8 @@ export default function CalendarPage() {
       if (selectedDayStr === modalData.date) {
         setSelectedDayEvents(prev => [...prev, { ...added, source: "event" }]);
       }
-    } catch (e) {
-      alert("Etkinlik eklenemedi: " + e);
+    } catch (e: any) {
+      alert("Etkinlik eklenemedi: " + (e?.message || e?.details || String(e)));
     }
   };
 
@@ -172,8 +172,8 @@ export default function CalendarPage() {
         await deleteCalendarEvent(id);
         setEvents(prev => prev.filter(e => e.id !== id));
         setSelectedDayEvents(prev => prev.filter(e => e.id !== id));
-      } catch (e) {
-        alert("Etkinlik silinemedi: " + e);
+      } catch (e: any) {
+        alert("Etkinlik silinemedi: " + (e?.message || e?.details || String(e)));
       }
     }
   };

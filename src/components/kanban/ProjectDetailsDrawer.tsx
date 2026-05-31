@@ -72,7 +72,7 @@ export default function ProjectDetailsDrawer({ isOpen, onClose, project, onProje
       setTasks(taskList);
       setRevisions(revList);
       setTransactions(txList.filter((t: any) => t.project_id === project.id));
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
     } finally {
       setLoading(false);
@@ -107,8 +107,8 @@ export default function ProjectDetailsDrawer({ isOpen, onClose, project, onProje
       });
       setTasks(prev => [...prev, added]);
       setNewTaskTitle("");
-    } catch (e) {
-      alert("Görev eklenemedi: " + e);
+    } catch (e: any) {
+      alert("Görev eklenemedi: " + (e?.message || e?.details || String(e)));
     }
   };
 
@@ -117,8 +117,8 @@ export default function ProjectDetailsDrawer({ isOpen, onClose, project, onProje
     try {
       await updateGorev(taskId, { sutun_durumu: nextStatus as any });
       setTasks(prev => prev.map(t => t.id === taskId ? { ...t, sutun_durumu: nextStatus as any } : t));
-    } catch (e) {
-      alert("Görev güncellenemedi: " + e);
+    } catch (e: any) {
+      alert("Görev güncellenemedi: " + (e?.message || e?.details || String(e)));
     }
   };
 
@@ -126,8 +126,8 @@ export default function ProjectDetailsDrawer({ isOpen, onClose, project, onProje
     try {
       await deleteGorev(taskId);
       setTasks(prev => prev.filter(t => t.id !== taskId));
-    } catch (e) {
-      alert("Görev silinemedi: " + e);
+    } catch (e: any) {
+      alert("Görev silinemedi: " + (e?.message || e?.details || String(e)));
     }
   };
 
@@ -144,8 +144,8 @@ export default function ProjectDetailsDrawer({ isOpen, onClose, project, onProje
       setRevisions(prev => [added, ...prev]);
       setNewRevisionNote("");
       onProjectUpdated(); // Proje aşaması değişebileceğinden tetikle
-    } catch (e) {
-      alert("Revizyon eklenemedi: " + e);
+    } catch (e: any) {
+      alert("Revizyon eklenemedi: " + (e?.message || e?.details || String(e)));
     }
   };
 
@@ -154,8 +154,8 @@ export default function ProjectDetailsDrawer({ isOpen, onClose, project, onProje
       await deleteRevision(revId);
       setRevisions(prev => prev.filter(r => r.id !== revId));
       onProjectUpdated();
-    } catch (e) {
-      alert("Revizyon silinemedi: " + e);
+    } catch (e: any) {
+      alert("Revizyon silinemedi: " + (e?.message || e?.details || String(e)));
     }
   };
 
@@ -167,8 +167,8 @@ export default function ProjectDetailsDrawer({ isOpen, onClose, project, onProje
       await updateProject(currentProject.id, { revision_count: newCount });
       await reloadProject();
       onProjectUpdated();
-    } catch (e) {
-      alert("Revizyon sayısı güncellenemedi: " + e);
+    } catch (e: any) {
+      alert("Revizyon sayısı güncellenemedi: " + (e?.message || e?.details || String(e)));
     }
   };
 
@@ -193,8 +193,8 @@ export default function ProjectDetailsDrawer({ isOpen, onClose, project, onProje
       await loadDetails();
       await reloadProject();
       onProjectUpdated();
-    } catch (e) {
-      alert("Kaşe gideri eklenemedi: " + e);
+    } catch (e: any) {
+      alert("Kaşe gideri eklenemedi: " + (e?.message || e?.details || String(e)));
     }
   };
 
@@ -205,8 +205,8 @@ export default function ProjectDetailsDrawer({ isOpen, onClose, project, onProje
       await loadDetails();
       await reloadProject();
       onProjectUpdated();
-    } catch (e) {
-      alert("Kaşe gideri silinemedi: " + e);
+    } catch (e: any) {
+      alert("Kaşe gideri silinemedi: " + (e?.message || e?.details || String(e)));
     }
   };
 

@@ -54,8 +54,8 @@ export default function ProposalsPage() {
       await updateProposal(id, { archived: !currentArchived });
       setProposals(prev => prev.map(p => p.id === id ? { ...p, archived: !currentArchived } : p));
       showToast(currentArchived ? "Teklif arşivden çıkarıldı." : "Teklif arşive gönderildi.");
-    } catch (e) {
-      alert("Teklif arşiv durumu güncellenemedi: " + e);
+    } catch (e: any) {
+      alert("Teklif arşiv durumu güncellenemedi: " + (e?.message || e?.details || String(e)));
     }
   };
 
@@ -73,7 +73,7 @@ export default function ProposalsPage() {
       const clis = await getClients();
       setProposals(props);
       setClients(clis);
-    } catch (e) {
+    } catch (e: any) {
       console.error("Veriler yüklenirken hata oluştu:", e);
     } finally {
       setLoading(false);
@@ -110,8 +110,8 @@ export default function ProposalsPage() {
       } else {
         showToast("Teklif başarıyla kaydedildi.");
       }
-    } catch (e) {
-      alert("Teklif kaydedilirken hata oluştu: " + e);
+    } catch (e: any) {
+      alert("Teklif kaydedilirken hata oluştu: " + (e?.message || e?.details || String(e)));
     }
   };
 
@@ -128,8 +128,8 @@ export default function ProposalsPage() {
         await deleteProposal(id);
         showToast("Teklif silindi.");
         loadData();
-      } catch (e) {
-        alert("Teklif silinemedi: " + e);
+      } catch (e: any) {
+        alert("Teklif silinemedi: " + (e?.message || e?.details || String(e)));
       }
     }
   };
@@ -142,8 +142,8 @@ export default function ProposalsPage() {
       setClients(clis);
       setClientModalOpen(false);
       showToast(`${newClient.name} başarıyla eklendi.`);
-    } catch (e) {
-      alert("Müşteri eklenirken hata oluştu: " + e);
+    } catch (e: any) {
+      alert("Müşteri eklenirken hata oluştu: " + (e?.message || e?.details || String(e)));
     }
   };
 
@@ -530,8 +530,8 @@ export default function ProposalsPage() {
                         } else {
                           showToast(`Teklif durumu "${newStatus}" olarak güncellendi.`);
                         }
-                      } catch (err) {
-                        alert("Durum güncellenirken hata oluştu: " + err);
+                      } catch (err: any) {
+                        alert("Durum güncellenirken hata oluştu: " + (err?.message || err?.details || String(err)));
                       }
                     }}
                   >

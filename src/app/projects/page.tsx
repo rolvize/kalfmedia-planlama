@@ -93,8 +93,8 @@ export default function ProjectsPage() {
       }
       setProjectModal({ isOpen: false, data: null });
       loadData();
-    } catch (e) {
-      alert("Proje kaydedilirken hata oluştu: " + e);
+    } catch (e: any) {
+      alert("Proje kaydedilirken hata oluştu: " + (e?.message || String(e)));
     }
   };
 
@@ -103,8 +103,8 @@ export default function ProjectsPage() {
       try {
         await deleteProject(id);
         loadData();
-      } catch (e) {
-        alert("Proje silinemedi: " + e);
+      } catch (e: any) {
+        alert("Proje silinemedi: " + (e?.message || String(e)));
       }
     }
   };
@@ -114,8 +114,8 @@ export default function ProjectsPage() {
       await updateProject(projectId, { status: newStatus });
       // Yerel durum güncellemesi (API beklemeden anlık görsel kaydırma)
       setProjects(prev => prev.map(p => p.id === projectId ? { ...p, status: newStatus } : p));
-    } catch (e) {
-      alert("Durum güncellenemedi: " + e);
+    } catch (e: any) {
+      alert("Durum güncellenemedi: " + (e?.message || String(e)));
     }
   };
 
@@ -124,8 +124,8 @@ export default function ProjectsPage() {
       await updateProject(id, { archived: !currentArchived });
       // Yerel durum güncellemesi
       setProjects(prev => prev.map(p => p.id === id ? { ...p, archived: !currentArchived } : p));
-    } catch (e) {
-      alert("Proje arşiv durumu güncellenemedi: " + e);
+    } catch (e: any) {
+      alert("Proje arşiv durumu güncellenemedi: " + (e?.message || String(e)));
     }
   };
 
@@ -142,8 +142,8 @@ export default function ProjectsPage() {
         ...prev,
         data: prev.data ? { ...prev.data, client_id: added.id } : null
       }));
-    } catch (e) {
-      alert("Müşteri eklenemedi: " + e);
+    } catch (e: any) {
+      alert("Müşteri eklenemedi: " + (e?.message || String(e)));
     }
   };
 

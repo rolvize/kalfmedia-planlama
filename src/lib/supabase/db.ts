@@ -456,9 +456,11 @@ export const addClient = async (client: Omit<Client, 'id' | 'user_id' | 'created
     return newClient;
   }
   const uid = await getUserIdOrThrow();
+  // Strip any stale id/user_id/created_at that may come from form data
+  const { id: _id, user_id: _uid, created_at: _cat, ...cleanClient } = client as any;
   const { data, error } = await supabase
     .from('clients')
-    .insert([{ ...client, user_id: uid }])
+    .insert([{ ...cleanClient, user_id: uid }])
     .select()
     .single();
   if (error) throw error;
@@ -479,9 +481,11 @@ export const updateClient = async (id: string, client: Partial<Client>): Promise
     saveLocalDB(db);
     return updated;
   }
+  // Strip readonly fields before update
+  const { id: _id, user_id: _uid, created_at: _cat, ...cleanClient } = client as any;
   const { data, error } = await supabase
     .from('clients')
-    .update(client)
+    .update(cleanClient)
     .eq('id', id)
     .select()
     .single();
@@ -562,10 +566,27 @@ export const addProject = async (project: Omit<Project, 'id' | 'user_id' | 'crea
     return newPrj;
   }
   const uid = await getUserIdOrThrow();
-  const net = Number(project.price || 0) - Number(project.expense || 0);
+  // Strip readonly fields + convert empty string FKs to null
+  const { id: _id, user_id: _uid, created_at: _cat, net_profit: _np, ...cleanProject } = project as any;
+  const price = Number(cleanProject.price || 0);
+  const expense = Number(cleanProject.expense || 0);
+  const payload = {
+    ...cleanProject,
+    user_id: uid,
+    price,
+    expense,
+    net_profit: price - expense,
+    client_id: cleanProject.client_id || null,
+    start_date: cleanProject.start_date || null,
+    due_date: cleanProject.due_date || null,
+    drive_link: cleanProject.drive_link || null,
+    frameio_link: cleanProject.frameio_link || null,
+    moodboard_link: cleanProject.moodboard_link || null,
+    backup_disk: cleanProject.backup_disk || null,
+  };
   const { data, error } = await supabase
     .from('projects')
-    .insert([{ ...project, user_id: uid, net_profit: net }])
+    .insert([payload])
     .select()
     .single();
   if (error) throw error;
@@ -591,16 +612,27 @@ export const updateProject = async (id: string, project: Partial<Project>): Prom
     return updated;
   }
   
-  // Fiyat/Gider güncellenmişse karı yeniden hesapla
-  let updatePayload = { ...project };
-  if (project.price !== undefined || project.expense !== undefined) {
+  // Strip readonly fields
+  const { id: _id, user_id: _uid, created_at: _cat, ...cleanProject } = project as any;
+  
+  // Recalculate net_profit if price or expense changed
+  let updatePayload = { ...cleanProject };
+  if (cleanProject.price !== undefined || cleanProject.expense !== undefined) {
     const { data: current } = await supabase.from('projects').select('price, expense').eq('id', id).single();
     if (current) {
-      const price = project.price !== undefined ? Number(project.price) : Number(current.price);
-      const expense = project.expense !== undefined ? Number(project.expense) : Number(current.expense);
+      const price = cleanProject.price !== undefined ? Number(cleanProject.price) : Number(current.price);
+      const expense = cleanProject.expense !== undefined ? Number(cleanProject.expense) : Number(current.expense);
       updatePayload.net_profit = price - expense;
     }
   }
+  // Convert empty string FKs to null
+  if ('client_id' in updatePayload) updatePayload.client_id = updatePayload.client_id || null;
+  if ('start_date' in updatePayload) updatePayload.start_date = updatePayload.start_date || null;
+  if ('due_date' in updatePayload) updatePayload.due_date = updatePayload.due_date || null;
+  if ('drive_link' in updatePayload) updatePayload.drive_link = updatePayload.drive_link || null;
+  if ('frameio_link' in updatePayload) updatePayload.frameio_link = updatePayload.frameio_link || null;
+  if ('moodboard_link' in updatePayload) updatePayload.moodboard_link = updatePayload.moodboard_link || null;
+  if ('backup_disk' in updatePayload) updatePayload.backup_disk = updatePayload.backup_disk || null;
 
   const { data, error } = await supabase
     .from('projects')
@@ -801,19 +833,28 @@ export const addTransaction = async (transaction: Omit<Transaction, 'id' | 'user
     return newTx;
   }
   const uid = await getUserIdOrThrow();
+  // Strip readonly fields + convert empty string FKs to null
+  const { id: _id, user_id: _uid, created_at: _cat, ...cleanTx } = transaction as any;
+  const payload = {
+    ...cleanTx,
+    user_id: uid,
+    amount: Number(cleanTx.amount || 0),
+    // Convert empty string project_id to null (UUID foreign key)
+    project_id: cleanTx.project_id || null,
+  };
   const { data, error } = await supabase
     .from('transactions')
-    .insert([{ ...transaction, user_id: uid }])
+    .insert([payload])
     .select()
     .single();
   if (error) throw error;
 
   // Gider eklendiyse, projenin masrafını da güncelle
-  if (transaction.type === 'Gider' && transaction.project_id) {
-    const { data: currentPrj } = await supabase.from('projects').select('expense').eq('id', transaction.project_id).single();
+  if (payload.type === 'Gider' && payload.project_id) {
+    const { data: currentPrj } = await supabase.from('projects').select('expense').eq('id', payload.project_id).single();
     if (currentPrj) {
-      const newExpense = Number(currentPrj.expense || 0) + Number(transaction.amount);
-      await supabase.from('projects').update({ expense: newExpense }).eq('id', transaction.project_id);
+      const newExpense = Number(currentPrj.expense || 0) + Number(payload.amount);
+      await supabase.from('projects').update({ expense: newExpense }).eq('id', payload.project_id);
     }
   }
 
@@ -871,9 +912,12 @@ export const updateTransaction = async (id: string, tx: Partial<Transaction>): P
     saveLocalDB(db);
     return updated;
   }
+  // Strip readonly fields before update
+  const { id: _id, user_id: _uid, created_at: _cat, ...cleanTx } = tx as any;
+  if ('project_id' in cleanTx) cleanTx.project_id = cleanTx.project_id || null;
   const { data, error } = await supabase
     .from('transactions')
-    .update(tx)
+    .update(cleanTx)
     .eq('id', id)
     .select()
     .single();
@@ -943,9 +987,16 @@ export const addCalendarEvent = async (event: Omit<CalendarEvent, 'id' | 'user_i
     return newEv;
   }
   const uid = await getUserIdOrThrow();
+  // Strip readonly fields + convert empty string FKs to null
+  const { id: _id, user_id: _uid, ...cleanEvent } = event as any;
+  const payload = {
+    ...cleanEvent,
+    user_id: uid,
+    project_id: cleanEvent.project_id || null,
+  };
   const { data, error } = await supabase
     .from('calendar_events')
-    .insert([{ ...event, user_id: uid }])
+    .insert([payload])
     .select()
     .single();
   if (error) throw error;
@@ -1026,9 +1077,17 @@ export const addProposal = async (proposal: Omit<Proposal, 'id' | 'user_id' | 'c
     saveLocalDB(db);
   } else {
     const uid = await getUserIdOrThrow();
+    // Strip readonly fields + convert empty string FKs to null
+    const { id: _id, user_id: _uid, created_at: _cat, updated_at: _uat, ...cleanProposal } = proposal as any;
+    const payload = {
+      ...cleanProposal,
+      user_id: uid,
+      client_id: cleanProposal.client_id || null,
+      proposal_amount: Number(cleanProposal.proposal_amount || 0),
+    };
     const { data, error } = await supabase
       .from('proposals')
-      .insert([{ ...proposal, user_id: uid }])
+      .insert([payload])
       .select()
       .single();
     if (error) throw error;
@@ -1078,9 +1137,12 @@ export const updateProposal = async (id: string, proposalUpdate: Partial<Proposa
       previousStatus = currentProposal.status;
     }
 
+    // Strip readonly fields before update
+    const { id: _id, user_id: _uid, created_at: _cat, ...cleanUpdate } = proposalUpdate as any;
+    if ('client_id' in cleanUpdate) cleanUpdate.client_id = cleanUpdate.client_id || null;
     const { data, error } = await supabase
       .from('proposals')
-      .update({ ...proposalUpdate, updated_at: new Date().toISOString() })
+      .update({ ...cleanUpdate, updated_at: new Date().toISOString() })
       .eq('id', id)
       .select()
       .single();
@@ -1149,9 +1211,11 @@ export const addEquipment = async (eq: Omit<Equipment, 'id' | 'user_id' | 'creat
     return newEq;
   }
   const uid = await getUserIdOrThrow();
+  // Strip readonly fields
+  const { id: _id, user_id: _uid, created_at: _cat, ...cleanEq } = eq as any;
   const { data, error } = await supabase
     .from('equipment')
-    .insert([{ ...eq, user_id: uid }])
+    .insert([{ ...cleanEq, user_id: uid }])
     .select()
     .single();
   if (error) throw error;
@@ -1173,9 +1237,11 @@ export const updateEquipment = async (id: string, eq: Partial<Equipment>): Promi
     saveLocalDB(db);
     return updated;
   }
+  // Strip readonly fields before update
+  const { id: _id, user_id: _uid, created_at: _cat, ...cleanEq } = eq as any;
   const { data, error } = await supabase
     .from('equipment')
-    .update(eq)
+    .update(cleanEq)
     .eq('id', id)
     .select()
     .single();
@@ -1280,9 +1346,17 @@ export const addEquipmentBooking = async (
   }
   
   const uid = await getUserIdOrThrow();
+  // Strip readonly fields + convert empty string FKs to null
+  const { id: _id, user_id: _uid, created_at: _cat, ...cleanBooking } = booking as any;
+  const payload = {
+    ...cleanBooking,
+    user_id: uid,
+    project_id: cleanBooking.project_id || null,
+    equipment_id: cleanBooking.equipment_id || null,
+  };
   const { data, error } = await supabase
     .from('equipment_bookings')
-    .insert([{ ...booking, user_id: uid }])
+    .insert([payload])
     .select()
     .single();
   if (error) throw error;

@@ -35,7 +35,7 @@ export default function ClientsPage() {
       const prjs = await getProjects();
       setClients(clis);
       setProjects(prjs);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
     } finally {
       setLoading(false);
@@ -55,8 +55,8 @@ export default function ClientsPage() {
       }
       setClientModal({ isOpen: false, data: null });
       loadData();
-    } catch (e) {
-      alert("Müşteri kaydedilirken hata oluştu: " + e);
+    } catch (e: any) {
+      alert("Müşteri kaydedilirken hata oluştu: " + (e?.message || e?.details || String(e)));
     }
   };
 
@@ -71,8 +71,8 @@ export default function ClientsPage() {
       try {
         await deleteClient(id);
         loadData();
-      } catch (e) {
-        alert("Müşteri silinemedi: " + e);
+      } catch (e: any) {
+        alert("Müşteri silinemedi: " + (e?.message || e?.details || String(e)));
       }
     }
   };

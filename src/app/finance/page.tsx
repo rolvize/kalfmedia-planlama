@@ -44,8 +44,8 @@ export default function FinancePage() {
     try {
       await updateTransaction(id, { archived: !currentArchived });
       setTransactions(prev => prev.map(t => t.id === id ? { ...t, archived: !currentArchived } : t));
-    } catch (e) {
-      alert("Finansal hareket arşiv durumu güncellenemedi: " + e);
+    } catch (e: any) {
+      alert("Finansal hareket arşiv durumu güncellenemedi: " + (e?.message || e?.details || String(e)));
     }
   };
 
@@ -56,7 +56,7 @@ export default function FinancePage() {
       const prjs = await getProjects();
       setTransactions(txs);
       setProjects(prjs);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
     } finally {
       setLoading(false);
@@ -72,8 +72,8 @@ export default function FinancePage() {
       await addTransaction(formData);
       setTxModalOpen(false);
       loadData();
-    } catch (e) {
-      alert("İşlem kaydedilemedi: " + e);
+    } catch (e: any) {
+      alert("İşlem kaydedilemedi: " + (e?.message || e?.details || String(e)));
     }
   };
 
@@ -82,8 +82,8 @@ export default function FinancePage() {
       try {
         await deleteTransaction(id);
         loadData();
-      } catch (e) {
-        alert("İşlem silinemedi: " + e);
+      } catch (e: any) {
+        alert("İşlem silinemedi: " + (e?.message || e?.details || String(e)));
       }
     }
   };

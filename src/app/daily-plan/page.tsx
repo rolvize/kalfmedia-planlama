@@ -72,7 +72,7 @@ export default function DailyPlanPage() {
       const pList = await getProjects();
       setGorevler(gList);
       setProjects(pList);
-    } catch (e) {
+    } catch (e: any) {
       console.error("Veriler yüklenirken hata oluştu:", e);
     } finally {
       setLoading(false);
@@ -116,8 +116,8 @@ export default function DailyPlanPage() {
       try {
         await deleteGorev(id);
         loadData();
-      } catch (e) {
-        alert("Görev silinemedi: " + e);
+      } catch (e: any) {
+        alert("Görev silinemedi: " + (e?.message || e?.details || String(e)));
       }
     }
   };
@@ -161,8 +161,8 @@ export default function DailyPlanPage() {
       // Yerel state güncellemesi (Anında hissettirmek için)
       setGorevler(prev => prev.map(g => g.id === taskId ? { ...g, sutun_durumu: targetColumnId as any } : g));
       await updateGorev(taskId, { sutun_durumu: targetColumnId as any });
-    } catch (e) {
-      alert("Durum güncellenemedi: " + e);
+    } catch (e: any) {
+      alert("Durum güncellenemedi: " + (e?.message || e?.details || String(e)));
       loadData();
     }
   };
@@ -183,8 +183,8 @@ export default function DailyPlanPage() {
       // Yerel state güncellemesi
       setGorevler(prev => prev.map(g => g.id === id ? { ...g, sutun_durumu: nextStatus as any } : g));
       await updateGorev(id, { sutun_durumu: nextStatus as any });
-    } catch (e) {
-      alert("Durum güncellenemedi: " + e);
+    } catch (e: any) {
+      alert("Durum güncellenemedi: " + (e?.message || e?.details || String(e)));
       loadData();
     }
   };

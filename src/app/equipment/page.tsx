@@ -65,7 +65,7 @@ export default function EquipmentPage() {
 
       if (eq.length > 0) setSelectedEqId(eq[0].id);
       if (p.length > 0) setSelectedProjectId(p[0].id);
-    } catch (e) {
+    } catch (e: any) {
       console.error("Veriler yüklenemedi:", e);
     } finally {
       setLoading(false);
@@ -107,8 +107,8 @@ export default function EquipmentPage() {
       setEqNotes("");
       setEqStatus("Aktif");
       if (!selectedEqId) setSelectedEqId(added.id);
-    } catch (e) {
-      alert("Ekipman eklenemedi: " + e);
+    } catch (e: any) {
+      alert("Ekipman eklenemedi: " + (e?.message || e?.details || String(e)));
     }
   };
 
@@ -116,8 +116,8 @@ export default function EquipmentPage() {
     try {
       const updated = await updateEquipment(id, { status: newStatus });
       setEquipmentList(prev => prev.map(item => item.id === id ? updated : item));
-    } catch (e) {
-      alert("Ekipman durumu güncellenemedi: " + e);
+    } catch (e: any) {
+      alert("Ekipman durumu güncellenemedi: " + (e?.message || e?.details || String(e)));
     }
   };
 
@@ -128,8 +128,8 @@ export default function EquipmentPage() {
       setEquipmentList(prev => prev.filter(item => item.id !== id));
       setBookings(prev => prev.filter(b => b.equipment_id !== id));
       if (selectedEqId === id) setSelectedEqId(equipmentList[0]?.id || "");
-    } catch (e) {
-      alert("Ekipman silinemedi: " + e);
+    } catch (e: any) {
+      alert("Ekipman silinemedi: " + (e?.message || e?.details || String(e)));
     }
   };
 
@@ -164,8 +164,8 @@ export default function EquipmentPage() {
     try {
       await deleteEquipmentBooking(id);
       setBookings(prev => prev.filter(b => b.id !== id));
-    } catch (e) {
-      alert("Rezervasyon kaldırılamadı: " + e);
+    } catch (e: any) {
+      alert("Rezervasyon kaldırılamadı: " + (e?.message || e?.details || String(e)));
     }
   };
 
