@@ -177,10 +177,10 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-950 overflow-x-hidden w-full max-w-full relative">
+    <div className="min-h-screen flex flex-col bg-slate-950 overflow-x-hidden w-full" style={{ maxWidth: '100vw' }}>
       
       {/* 1. ÜST BAR (TOPBAR) */}
-      <header className="sticky top-0 z-40 flex items-center justify-between px-6 py-4 bg-slate-900/70 dark:bg-zinc-900/70 backdrop-blur-md border-b border-slate-800/40">
+      <header className="sticky top-0 z-40 flex items-center justify-between px-3 sm:px-6 py-3 sm:py-4 bg-slate-900/70 dark:bg-zinc-900/70 backdrop-blur-md border-b border-slate-800/40 overflow-hidden" style={{ maxWidth: '100vw' }}>
         
         {/* Sol Logo Alanı */}
         <div className="flex items-center gap-3">
@@ -228,7 +228,7 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
 
             {/* Bildirim Çekmecesi (Popover) */}
             {isNotifOpen && (
-              <div className="absolute right-0 mt-3 w-80 bg-slate-900/80 dark:bg-zinc-900/80 backdrop-blur-lg border border-slate-800/45 shadow-2xl rounded-2xl p-4 z-50 flex flex-col gap-3 transition-all duration-300 ease-[0.16,1,0.3,1]">
+              <div className="absolute right-0 mt-3 w-72 sm:w-80 bg-slate-900/80 dark:bg-zinc-900/80 backdrop-blur-lg border border-slate-800/45 shadow-2xl rounded-2xl p-4 z-50 flex flex-col gap-3 transition-all duration-300 ease-[0.16,1,0.3,1]" style={{ maxWidth: 'calc(100vw - 2rem)' }}>
                 <div className="flex justify-between items-center border-b border-slate-800/60 pb-2">
                   <h4 className="font-bold text-xs text-slate-200">Bildirimler</h4>
                   <span className="text-[10px] text-slate-500">{unreadCount} Okunmamış</span>
@@ -296,14 +296,14 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
       )}
 
       {/* 3. ANA SAYFA DÜZENİ (SIDEBAR + MAIN CONTENT) */}
-      <div className="flex-1 flex relative">
+      <div className="flex-1 flex relative overflow-x-hidden" style={{ maxWidth: '100vw' }}>
         
         {/* Sidebar Navigasyon */}
         <aside 
-          className={`fixed lg:sticky top-0 bottom-0 left-0 w-64 bg-slate-900/70 dark:bg-zinc-900/70 backdrop-blur-md border-r border-slate-800/40 p-6 flex flex-col gap-8 transition-transform duration-300 ease-[0.16,1,0.3,1] z-50 ${
+          className={`fixed lg:sticky top-0 bottom-0 left-0 w-72 sm:w-64 bg-slate-900/70 dark:bg-zinc-900/70 backdrop-blur-md border-r border-slate-800/40 p-4 sm:p-6 flex flex-col gap-8 transition-transform duration-300 ease-[0.16,1,0.3,1] z-50 ${
             isSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
           }`}
-          style={{ height: isSidebarOpen ? "100vh" : "calc(100vh - 70px)" }}
+          style={{ height: '100dvh', top: 0 }}
         >
           {/* Mobil Kapatma Butonu */}
           <button 
@@ -361,7 +361,7 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
         )}
 
         {/* Ana İçerik Gövdesi */}
-        <main className="flex-1 p-4 sm:p-6 md:p-10 min-w-0 flex flex-col gap-8 overflow-x-hidden w-full max-w-full">
+        <main className="flex-1 p-4 sm:p-6 md:p-8 min-w-0 flex flex-col gap-6 sm:gap-8 overflow-x-hidden" style={{ maxWidth: '100%', width: 0, flexGrow: 1 }}>
           {children}
         </main>
       </div>
