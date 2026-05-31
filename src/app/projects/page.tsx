@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import AuthenticatedLayout from "../../components/AuthenticatedLayout";
-import { getProjects, addProject, updateProject, deleteProject, getClients, addClient } from "../../lib/supabase/db";
-import { Project, Client } from "../../types";
+import { getProjects, addProject, updateProject, deleteProject, getClients, addClient, getGorevler } from "../../lib/supabase/db";
+import { Project, Client, Gorev } from "../../types";
 import {
   Plus, 
   Search, 
@@ -17,7 +18,14 @@ import {
   ChevronRight,
   ExternalLink,
   AlertTriangle,
-  Archive
+  Archive,
+  CheckSquare,
+  Clock,
+  ArrowUpRight,
+  ListTodo,
+  ChevronDown,
+  ChevronUp,
+  Flame
 } from "lucide-react";
 
 import ProjectModal from "../../components/forms/ProjectModal";
@@ -46,10 +54,13 @@ const STATUS_COLORS: { [key: string]: string } = {
 };
 
 export default function ProjectsPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [clients, setClients] = useState<Client[]>([]);
+  const [clients,  setClients]  = useState<Client[]>([]);
+  const [gorevler, setGorevler] = useState<Gorev[]>([]);
   const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
+  const [gorevWidgetOpen, setGorevWidgetOpen] = useState(true);
 
   // Filtreler
   const [searchQuery, setSearchQuery] = useState("");
@@ -68,10 +79,14 @@ export default function ProjectsPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const prjs = await getProjects();
-      const clis = await getClients();
+      const [prjs, clis, gorevs] = await Promise.all([
+        getProjects(),
+        getClients(),
+        getGorevler()
+      ]);
       setProjects(prjs);
       setClients(clis);
+      setGorevler(gorevs);
     } catch (e) {
       console.error(e);
     } finally {
@@ -193,11 +208,48 @@ export default function ProjectsPage() {
     return val.toLocaleString("tr-TR", { style: "currency", currency: "TRY", maximumFractionDigits: 0 });
   };
 
+  // ── Gündelik Görev Widget Hesaplamaları ──────────────────────────────
+  const todayStr   = useMemo(() => new Date().toISOString().split("T")[0], []);
+  const tomorrowStr = useMemo(() => {
+    const d = new Date(); d.setDate(d.getDate() + 1);
+    return d.toISOString().split("T")[0];
+  }, []);
+  const weekEnd = useMemo(() => {
+    const d = new Date(); d.setDate(d.getDate() + 7);
+    return d.toISOString().split("T")[0];
+  }, []);
+
+  const aktifGorevler = useMemo(
+    () => gorevler.filter(g => !g.archived && g.sutun_durumu !== "Tamamlandı"),
+    [gorevler]
+  );
+
+  const gorevGruplari = useMemo(() => ({
+    gec:    aktifGorevler.filter(g => g.planlanan_tarih < todayStr),
+    bugun:  aktifGorevler.filter(g => g.planlanan_tarih === todayStr),
+    yarin:  aktifGorevler.filter(g => g.planlanan_tarih === tomorrowStr),
+    hafta:  aktifGorevler.filter(g => g.planlanan_tarih > tomorrowStr && g.planlanan_tarih <= weekEnd),
+  }), [aktifGorevler, todayStr, tomorrowStr, weekEnd]);
+
+  const oncelikRenk: Record<string, string> = {
+    "Yüksek": "bg-rose-600 text-white",
+    "Orta":   "bg-blue-600 text-white",
+    "Düşük":  "bg-slate-600 text-white",
+  };
+
+  const sutunRenk: Record<string, string> = {
+    "Yapılmayı Bekleyenler": "text-amber-400",
+    "Yapılacaklar":          "text-blue-400",
+    "Yapılıyor":             "text-purple-400",
+    "Test":                  "text-cyan-400",
+    "Tamamlandı":           "text-emerald-400",
+  };
+
   return (
     <AuthenticatedLayout>
       <div className="flex flex-col gap-6">
         
-        {/* Üst Sayfa Başlığı ve Toggles */}
+        {/* Sayfa Başlığı */}
         <div className="flex justify-between items-center flex-wrap gap-4">
           <div>
             <h1 className="text-2xl font-black">Proje Yönetim Paneli</h1>
@@ -231,6 +283,136 @@ export default function ProjectsPage() {
               <Plus size={14} strokeWidth={1.5} /> Yeni İş Ekle
             </button>
           </div>
+        </div>
+
+        {/* ⚡ GÜNDELİK GÖREV WİDGET'I — İklayanınca daily-plan sayfasına yönlendiriyor */}
+        <div className="glass-card border border-slate-800/40">
+          {/* Widget Başlığı */}
+          <button
+            onClick={() => setGorevWidgetOpen(v => !v)}
+            className="w-full flex items-center justify-between gap-3 cursor-pointer group"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-blue-600/10 border border-blue-500/20">
+                <ListTodo size={14} className="text-blue-400" />
+              </div>
+              <div className="text-left">
+                <p className="text-xs font-bold text-slate-200">Gündelik Plan Özeti</p>
+                <p className="text-[10px] text-slate-500">
+                  {gorevGruplari.gec.length > 0 && (
+                    <span className="text-rose-400 font-bold">{gorevGruplari.gec.length} gecikmiş · </span>
+                  )}
+                  {gorevGruplari.bugun.length} bugün · {gorevGruplari.yarin.length} yarın · {gorevGruplari.hafta.length} bu hafta
+                  <span className="ml-2 text-blue-400">Gündelik Plan'a git →</span>
+                </p>
+              </div>
+            </div>
+            <div className="text-slate-600 group-hover:text-slate-400 transition-colors">
+              {gorevWidgetOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </div>
+          </button>
+
+          {/* Widget İçeriği */}
+          {gorevWidgetOpen && (
+            <div className="mt-4 flex flex-col gap-3">
+
+              {/* Geçikmiş görevler */}
+              {gorevGruplari.gec.length > 0 && (
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-rose-400 mb-1.5 flex items-center gap-1">
+                    <Flame size={10} /> Gecikmiş — {gorevGruplari.gec.length} Görev
+                  </p>
+                  <div className="flex flex-col gap-1.5">
+                    {gorevGruplari.gec.slice(0, 4).map(g => (
+                      <button
+                        key={g.id}
+                        onClick={() => router.push("/daily-plan")}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 bg-rose-500/5 border border-rose-500/15 hover:border-rose-500/30 hover:bg-rose-500/10 rounded-xl transition-all text-left group/t cursor-pointer"
+                      >
+                        <span className={`shrink-0 text-[8px] font-black px-1.5 py-0.5 rounded ${oncelikRenk[g.oncelik] ?? "bg-slate-600 text-white"}`}>
+                          {g.oncelik}
+                        </span>
+                        <span className="flex-1 text-xs text-slate-300 truncate group-hover/t:text-white">{g.gorev_adi}</span>
+                        <span className="shrink-0 text-[9px] text-rose-400 font-bold">{g.planlanan_tarih}</span>
+                        <ArrowUpRight size={11} className="shrink-0 text-slate-600 group-hover/t:text-blue-400 transition-colors" />
+                      </button>
+                    ))}
+                    {gorevGruplari.gec.length > 4 && (
+                      <button onClick={() => router.push("/daily-plan")} className="text-[10px] text-slate-500 hover:text-blue-400 cursor-pointer transition-colors text-left pl-1">
+                        +{gorevGruplari.gec.length - 4} daha →
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Bugün */}
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-widest text-blue-400 mb-1.5 flex items-center gap-1">
+                  <Clock size={10} /> Bugün — {gorevGruplari.bugun.length} Görev
+                </p>
+                {gorevGruplari.bugun.length === 0 ? (
+                  <p className="text-[10px] text-slate-600 italic pl-1">Bugün için planlanmış görev yok</p>
+                ) : (
+                  <div className="flex flex-col gap-1.5">
+                    {gorevGruplari.bugun.slice(0, 5).map(g => (
+                      <button
+                        key={g.id}
+                        onClick={() => router.push("/daily-plan")}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 bg-blue-500/5 border border-blue-500/10 hover:border-blue-500/25 hover:bg-blue-500/10 rounded-xl transition-all text-left group/t cursor-pointer"
+                      >
+                        <span className={`shrink-0 text-[8px] font-black px-1.5 py-0.5 rounded ${oncelikRenk[g.oncelik] ?? "bg-slate-600 text-white"}`}>
+                          {g.oncelik}
+                        </span>
+                        <span className="flex-1 text-xs text-slate-300 truncate group-hover/t:text-white">{g.gorev_adi}</span>
+                        <span className={`shrink-0 text-[9px] font-semibold ${sutunRenk[g.sutun_durumu] ?? "text-slate-500"}`}>{g.sutun_durumu}</span>
+                        <ArrowUpRight size={11} className="shrink-0 text-slate-600 group-hover/t:text-blue-400 transition-colors" />
+                      </button>
+                    ))}
+                    {gorevGruplari.bugun.length > 5 && (
+                      <button onClick={() => router.push("/daily-plan")} className="text-[10px] text-slate-500 hover:text-blue-400 cursor-pointer transition-colors text-left pl-1">
+                        +{gorevGruplari.bugun.length - 5} daha →
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Yarın + Bu Hafta — kompakt özet */}
+              {(gorevGruplari.yarin.length > 0 || gorevGruplari.hafta.length > 0) && (
+                <div className="flex gap-3 flex-wrap">
+                  {gorevGruplari.yarin.length > 0 && (
+                    <button
+                      onClick={() => router.push("/daily-plan")}
+                      className="flex items-center gap-2 px-3 py-2 bg-slate-900/60 border border-slate-800/50 hover:border-blue-500/20 rounded-xl transition-all cursor-pointer text-xs text-slate-400 hover:text-blue-400"
+                    >
+                      <CheckSquare size={12} className="text-slate-500" />
+                      <span className="font-semibold">Yarın:</span> {gorevGruplari.yarin.length} görev
+                      <ArrowUpRight size={11} />
+                    </button>
+                  )}
+                  {gorevGruplari.hafta.length > 0 && (
+                    <button
+                      onClick={() => router.push("/daily-plan")}
+                      className="flex items-center gap-2 px-3 py-2 bg-slate-900/60 border border-slate-800/50 hover:border-blue-500/20 rounded-xl transition-all cursor-pointer text-xs text-slate-400 hover:text-blue-400"
+                    >
+                      <Calendar size={12} className="text-slate-500" />
+                      <span className="font-semibold">Bu Hafta:</span> {gorevGruplari.hafta.length} görev
+                      <ArrowUpRight size={11} />
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Tümünü Gör butonu */}
+              <button
+                onClick={() => router.push("/daily-plan")}
+                className="w-full py-2 border border-dashed border-slate-800/60 hover:border-blue-500/25 rounded-xl text-[10px] text-slate-500 hover:text-blue-400 font-bold flex justify-center items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <ListTodo size={11} /> Tüm Gündelik Planı Aç
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Filtreleme Paneli */}
