@@ -23,8 +23,11 @@ import {
   Camera,
   Sun,
   Moon,
-  Layers
+  Layers,
+  Zap,
+  Inbox
 } from "lucide-react";
+import { getInboxItems, addInboxItem, subscribeToInbox, InboxItem } from "../lib/inbox";
 
 export default function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -42,6 +45,11 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
+  // Hızlı Inbox state
+  const [inboxInput, setInboxInput] = useState("");
+  const [inboxItems, setInboxItems] = useState<InboxItem[]>([]);
+  const [inboxSaved, setInboxSaved] = useState(false);
+
   // Theme support state and toggle
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
@@ -54,6 +62,10 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
     } else {
       document.documentElement.classList.remove("light");
     }
+    // Inbox'ı yükle ve güncelleme olaylarına abone ol
+    setInboxItems(getInboxItems());
+    const unsub = subscribeToInbox(() => setInboxItems(getInboxItems()));
+    return unsub;
   }, []);
 
   const toggleTheme = () => {
@@ -312,6 +324,52 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
 
           {/* Navigasyon Link Grubu */}
           <div className="flex flex-col gap-2 mt-4 lg:mt-0">
+            
+            {/* ⚡ HIZLI FIKIR KUTUSU */}
+            <div className="mb-3">
+              <div className="flex items-center gap-1.5 mb-2">
+                <Zap size={10} strokeWidth={2} className="text-amber-400" />
+                <span className="text-[9px] font-black tracking-widest text-amber-400/80 uppercase">Hızlı Not</span>
+                {inboxItems.length > 0 && (
+                  <span className="ml-auto text-[9px] font-black px-1.5 py-0.5 bg-amber-500/15 border border-amber-500/20 text-amber-400 rounded-full">
+                    {inboxItems.length}
+                  </span>
+                )}
+              </div>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={inboxInput}
+                  onChange={(e) => setInboxInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && inboxInput.trim()) {
+                      e.preventDefault();
+                      addInboxItem(inboxInput);
+                      setInboxInput("");
+                      setInboxSaved(true);
+                      setTimeout(() => setInboxSaved(false), 1200);
+                    }
+                  }}
+                  placeholder="Aklına gelen bir şey..."
+                  className="w-full bg-slate-950/60 border border-slate-800/50 focus:border-amber-500/40 focus:bg-slate-950/80 rounded-xl px-3 py-2 text-[11px] text-slate-200 placeholder:text-slate-600 outline-none transition-all duration-300 pr-8"
+                />
+                {inboxSaved ? (
+                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] font-black text-emerald-400 animate-pulse">✓</span>
+                ) : (
+                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] text-slate-700 font-bold">↵</span>
+                )}
+              </div>
+              {inboxItems.length > 0 && (
+                <button
+                  onClick={() => router.push("/daily-plan")}
+                  className="w-full mt-1.5 py-1.5 px-2 rounded-lg text-[9px] font-bold text-amber-400/70 hover:text-amber-400 hover:bg-amber-500/5 border border-amber-500/10 hover:border-amber-500/20 transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Inbox size={10} />
+                  {inboxItems.length} not bekliyor → Plana Al
+                </button>
+              )}
+            </div>
+            
             <span className="text-[10px] font-bold tracking-widest text-slate-600 uppercase mb-2">Navigasyon</span>
             <nav className="flex flex-col gap-1.5">
               {menuItems.map((item) => {

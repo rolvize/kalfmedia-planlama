@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { X, CheckSquare, MessageSquare, Plus, Trash2, Calendar, Award } from "lucide-react";
+import { X, CheckSquare, MessageSquare, Plus, Trash2, Calendar, Award, Pencil, Check } from "lucide-react";
 import { Gorev, Project, GorevChecklistItem, GorevComment } from "../../types";
 
 interface GorevModalProps {
@@ -29,6 +29,9 @@ export default function GorevModal({ isOpen, onClose, onSave, gorev, projects, d
   // Checklist & Comments States
   const [checklist, setChecklist] = useState<GorevChecklistItem[]>([]);
   const [newChecklistItemTitle, setNewChecklistItemTitle] = useState("");
+  // Inline edit state for checklist items
+  const [editingChecklistId, setEditingChecklistId] = useState<string | null>(null);
+  const [editingChecklistText, setEditingChecklistText] = useState("");
 
   const [comments, setComments] = useState<GorevComment[]>([]);
   const [newCommentText, setNewCommentText] = useState("");
@@ -101,6 +104,25 @@ export default function GorevModal({ isOpen, onClose, onSave, gorev, projects, d
 
   const handleDeleteChecklistItem = (id: string) => {
     setChecklist(prev => prev.filter(item => item.id !== id));
+  };
+
+  const handleStartEditChecklist = (item: GorevChecklistItem) => {
+    setEditingChecklistId(item.id);
+    setEditingChecklistText(item.title);
+  };
+
+  const handleSaveChecklistEdit = (id: string) => {
+    const trimmed = editingChecklistText.trim();
+    if (trimmed) {
+      setChecklist(prev => prev.map(item => item.id === id ? { ...item, title: trimmed } : item));
+    }
+    setEditingChecklistId(null);
+    setEditingChecklistText("");
+  };
+
+  const handleCancelChecklistEdit = () => {
+    setEditingChecklistId(null);
+    setEditingChecklistText("");
   };
 
   // Comment Actions
@@ -297,22 +319,75 @@ export default function GorevModal({ isOpen, onClose, onSave, gorev, projects, d
             ) : (
               checklist.map(item => (
                 <div key={item.id} className="flex justify-between items-center p-2.5 bg-slate-950/40 border border-slate-850/50 rounded-xl group/chk">
-                  <label className={`flex items-center gap-2.5 cursor-pointer text-xs font-semibold select-none ${item.completed ? "line-through text-slate-500" : "text-slate-300"}`}>
-                    <input
-                      type="checkbox"
-                      checked={item.completed}
-                      onChange={() => handleToggleChecklistItem(item.id)}
-                      className="w-3.5 h-3.5 rounded bg-slate-900 border-slate-850 accent-blue-500 cursor-pointer"
-                    />
-                    <span>{item.title}</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteChecklistItem(item.id)}
-                    className="opacity-0 group-hover/chk:opacity-100 p-0.5 text-slate-500 hover:text-red-400 rounded transition-all duration-200 cursor-pointer"
-                  >
-                    <Trash2 size={12} strokeWidth={1.5} />
-                  </button>
+                  {editingChecklistId === item.id ? (
+                    /* EDIT MODU */
+                    <div className="flex items-center gap-2 flex-1">
+                      <input
+                        type="text"
+                        autoFocus
+                        value={editingChecklistText}
+                        onChange={(e) => setEditingChecklistText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") { e.preventDefault(); handleSaveChecklistEdit(item.id); }
+                          if (e.key === "Escape") handleCancelChecklistEdit();
+                        }}
+                        className="flex-1 bg-slate-900 border border-blue-500/40 rounded-lg px-2.5 py-1 text-xs text-slate-200 outline-none focus:border-blue-500/70 transition-colors"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSaveChecklistEdit(item.id)}
+                        className="p-1 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition-all cursor-pointer"
+                        title="Kaydet (Enter)"
+                      >
+                        <Check size={13} strokeWidth={2.5} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCancelChecklistEdit}
+                        className="p-1 text-slate-500 hover:text-slate-300 hover:bg-slate-800/60 rounded-lg transition-all cursor-pointer"
+                        title="İptal (Escape)"
+                      >
+                        <X size={13} strokeWidth={2} />
+                      </button>
+                    </div>
+                  ) : (
+                    /* NORMAL MODU */
+                    <>
+                      <label className={`flex items-center gap-2.5 cursor-pointer text-xs font-semibold select-none flex-1 min-w-0 ${item.completed ? "line-through text-slate-500" : "text-slate-300"}`}>
+                        <input
+                          type="checkbox"
+                          checked={item.completed}
+                          onChange={() => handleToggleChecklistItem(item.id)}
+                          className="w-3.5 h-3.5 rounded bg-slate-900 border-slate-850 accent-blue-500 cursor-pointer shrink-0"
+                        />
+                        <span
+                          className="truncate"
+                          onDoubleClick={() => handleStartEditChecklist(item)}
+                          title="Düzenlemek için çift tıkla"
+                        >
+                          {item.title}
+                        </span>
+                      </label>
+                      <div className="flex items-center gap-1 opacity-0 group-hover/chk:opacity-100 transition-all duration-200 shrink-0 ml-2">
+                        <button
+                          type="button"
+                          onClick={() => handleStartEditChecklist(item)}
+                          className="p-0.5 text-slate-500 hover:text-blue-400 rounded transition-all cursor-pointer"
+                          title="Düzenle"
+                        >
+                          <Pencil size={11} strokeWidth={1.5} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteChecklistItem(item.id)}
+                          className="p-0.5 text-slate-500 hover:text-red-400 rounded transition-all duration-200 cursor-pointer"
+                          title="Sil"
+                        >
+                          <Trash2 size={12} strokeWidth={1.5} />
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               ))
             )}
