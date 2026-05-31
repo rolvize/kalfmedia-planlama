@@ -49,12 +49,12 @@ const KATEGORI_COLORS: Record<string, { bg: string; text: string; border: string
 };
 
 const ONCELIK_COLORS: Record<string, string> = {
-  "Düşük":  "bg-slate-800 text-slate-400",
-  "Orta":   "bg-blue-800/40 text-blue-300",
-  "Yüksek": "bg-red-950/60 text-red-400 border border-red-500/20",
+  "Düşük":  "bg-slate-600 text-white",
+  "Orta":   "bg-blue-600 text-white",
+  "Yüksek": "bg-rose-600 text-white",
 };
 
-const KAPASITE_MAX = 3; // Bugün için max kritik (Yüksek) görev sayısı
+const KAPASITE_MAX = 5; // Bugün için max toplam görev sayısı
 
 // ─── Component ───────────────────────────────────────────────────
 export default function DailyPlanPage() {
@@ -109,8 +109,13 @@ export default function DailyPlanPage() {
   // ── Kapasite Hesabı ───────────────────────────────────────────
   const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
 
+  // Kapasite: bugün tarihli, aktif (tamamlanmamış + arşivlenmemiş) tüm görevler
   const kritikBugun = useMemo(
-    () => gorevler.filter(g => !g.archived && g.planlanan_tarih === todayStr && g.oncelik === "Yüksek").length,
+    () => gorevler.filter(
+      g => !g.archived &&
+           g.planlanan_tarih === todayStr &&
+           g.sutun_durumu !== "Tamamlandı"
+    ).length,
     [gorevler, todayStr]
   );
 
