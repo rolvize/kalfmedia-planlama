@@ -146,6 +146,7 @@ export interface Gorev {
   sutun_durumu: "Yapılmayı Bekleyenler" | "Yapılacaklar" | "Yapılıyor" | "Test" | "Tamamlandı";
   planlanan_tarih: string; // date string YYYY-MM-DD
   oncelik: "Düşük" | "Orta" | "Yüksek";
+  archived?: boolean;
   checklist?: GorevChecklistItem[];
   comments?: GorevComment[];
   created_at?: string;

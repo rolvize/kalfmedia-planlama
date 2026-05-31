@@ -1,79 +1,99 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import AuthenticatedLayout from "../../components/AuthenticatedLayout";
 import { getGorevler, addGorev, updateGorev, deleteGorev, getProjects } from "../../lib/supabase/db";
 import { Gorev, Project } from "../../types";
-import { 
-  Plus, 
-  Search, 
-  ChevronLeft, 
-  ChevronRight, 
-  Trash2, 
-  Calendar, 
-  Flag, 
+import {
+  Plus,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  Trash2,
+  Calendar,
   Briefcase,
-  AlertCircle,
   Clock,
-  Sparkles,
   CheckSquare,
   MessageSquare,
-  Eye,
-  AlignLeft,
   CheckCircle2,
-  Layers
+  Archive,
+  ArchiveRestore,
+  Inbox,
+  Zap,
+  Brain,
+  AlertTriangle,
 } from "lucide-react";
 import GorevModal from "../../components/forms/GorevModal";
+import {
+  getInboxItems,
+  addInboxItem,
+  deleteInboxItem,
+  subscribeToInbox,
+  InboxItem,
+} from "../../lib/inbox";
 
+// ─── Sabitler ────────────────────────────────────────────────────
 const SUTUNLAR = [
-  { id: "Yapılmayı Bekleyenler", label: "Yapılmayı Bekleyenler", color: "from-amber-600 to-amber-500", glow: "rgba(245, 158, 11, 0.15)" },
-  { id: "Yapılacaklar", label: "Yapılacaklar", color: "from-blue-600 to-indigo-500", glow: "rgba(59, 130, 246, 0.15)" },
-  { id: "Yapılıyor", label: "Yapılıyor", color: "from-purple-600 to-pink-500", glow: "rgba(168, 85, 247, 0.15)" },
-  { id: "Test", label: "Test", color: "from-cyan-600 to-blue-500", glow: "rgba(6, 182, 212, 0.15)" },
-  { id: "Tamamlandı", label: "Tamamlandı", color: "from-emerald-600 to-teal-500", glow: "rgba(16, 185, 129, 0.15)" }
+  { id: "Yapılmayı Bekleyenler", label: "Yapılmayı Bekleyenler", short: "Bekliyor", color: "from-amber-600 to-amber-500", glow: "rgba(245,158,11,0.15)" },
+  { id: "Yapılacaklar",          label: "Yapılacaklar",          short: "Bugün",    color: "from-blue-600 to-indigo-500",  glow: "rgba(59,130,246,0.15)" },
+  { id: "Yapılıyor",             label: "Yapılıyor",             short: "Aktif",    color: "from-purple-600 to-pink-500",  glow: "rgba(168,85,247,0.15)" },
+  { id: "Test",                  label: "Test / Kontrol",        short: "Test",     color: "from-cyan-600 to-blue-500",    glow: "rgba(6,182,212,0.15)" },
+  { id: "Tamamlandı",            label: "Tamamlandı",            short: "Bitti",    color: "from-emerald-600 to-teal-500", glow: "rgba(16,185,129,0.15)" },
 ];
 
-const KATEGORI_COLORS: { [key: string]: { bg: string, text: string, border: string } } = {
-  "Prodüksiyon": { bg: "bg-blue-500/10", text: "text-blue-400", border: "border-blue-500/20" },
-  "Sosyal Medya": { bg: "bg-pink-500/10", text: "text-pink-400", border: "border-pink-500/20" },
-  "Vize": { bg: "bg-amber-500/10", text: "text-amber-400", border: "border-amber-500/20" },
-  "Kişisel / Rutin": { bg: "bg-emerald-500/10", text: "text-emerald-400", border: "border-emerald-500/20" }
+const KATEGORI_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  "Prodüksiyon":    { bg: "bg-blue-500/10",    text: "text-blue-400",    border: "border-blue-500/20" },
+  "Sosyal Medya":   { bg: "bg-pink-500/10",    text: "text-pink-400",    border: "border-pink-500/20" },
+  "Vize":           { bg: "bg-amber-500/10",   text: "text-amber-400",   border: "border-amber-500/20" },
+  "Kişisel / Rutin":{ bg: "bg-emerald-500/10", text: "text-emerald-400", border: "border-emerald-500/20" },
 };
 
-const ONCELIK_COLORS: { [key: string]: { bg: string, text: string } } = {
-  "Düşük": { bg: "bg-slate-800 text-slate-400", text: "text-slate-400" },
-  "Orta": { bg: "bg-blue-800/40 text-blue-300", text: "text-blue-300" },
-  "Yüksek": { bg: "bg-red-950/60 text-red-400 border border-red-500/20", text: "text-red-400" }
+const ONCELIK_COLORS: Record<string, string> = {
+  "Düşük":  "bg-slate-800 text-slate-400",
+  "Orta":   "bg-blue-800/40 text-blue-300",
+  "Yüksek": "bg-red-950/60 text-red-400 border border-red-500/20",
 };
 
+const KAPASITE_MAX = 3; // Bugün için max kritik (Yüksek) görev sayısı
+
+// ─── Component ───────────────────────────────────────────────────
 export default function DailyPlanPage() {
-  const [loading, setLoading] = useState(true);
-  const [gorevler, setGorevler] = useState<Gorev[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  
-  // Arama & Filtreleme
-  const [searchQuery, setSearchQuery] = useState("");
-  const [kategoriFilter, setKategoriFilter] = useState("all");
-  const [oncelikFilter, setOncelikFilter] = useState("all");
-  
-  // Drag and Drop States
-  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
-  const [draggedOverColumn, setDraggedOverColumn] = useState<string | null>(null);
-  
-  // Modal State
-  const [modalOpen, setModalOpen] = useState(false);
-  const [selectedGorev, setSelectedGorev] = useState<Gorev | null>(null);
-  const [targetColumn, setTargetColumn] = useState<string | undefined>(undefined);
+  const [loading,          setLoading]          = useState(true);
+  const [gorevler,         setGorevler]         = useState<Gorev[]>([]);
+  const [projects,         setProjects]         = useState<Project[]>([]);
 
+  // Arama & Filtreleme
+  const [searchQuery,      setSearchQuery]      = useState("");
+  const [kategoriFilter,   setKategoriFilter]   = useState("all");
+  const [oncelikFilter,    setOncelikFilter]    = useState("all");
+
+  // Arşiv görünümü
+  const [showArchived,     setShowArchived]     = useState(false);
+
+  // Drag & Drop
+  const [draggedTaskId,    setDraggedTaskId]    = useState<string | null>(null);
+  const [dragOverColumn,   setDragOverColumn]   = useState<string | null>(null);
+
+  // Modal
+  const [modalOpen,        setModalOpen]        = useState(false);
+  const [selectedGorev,    setSelectedGorev]    = useState<Gorev | null>(null);
+  const [targetColumn,     setTargetColumn]     = useState<string | undefined>(undefined);
+
+  // Inbox
+  const [inboxItems,       setInboxItems]       = useState<InboxItem[]>([]);
+  const [inboxInput,       setInboxInput]       = useState("");
+  const [inboxSaved,       setInboxSaved]       = useState(false);
+  const [showInbox,        setShowInbox]        = useState(false);
+
+  // ── Veri Yükleme ──────────────────────────────────────────────
   const loadData = async () => {
     setLoading(true);
     try {
-      const gList = await getGorevler();
-      const pList = await getProjects();
+      const [gList, pList] = await Promise.all([getGorevler(), getProjects()]);
       setGorevler(gList);
       setProjects(pList);
     } catch (e: any) {
-      console.error("Veriler yüklenirken hata oluştu:", e);
+      console.error("Veri yüklenemedi:", e);
     } finally {
       setLoading(false);
     }
@@ -81,170 +101,332 @@ export default function DailyPlanPage() {
 
   useEffect(() => {
     loadData();
+    setInboxItems(getInboxItems());
+    const unsub = subscribeToInbox(() => setInboxItems(getInboxItems()));
+    return unsub;
   }, []);
 
-  const handleOpenAddModal = (columnId?: string) => {
-    setSelectedGorev(null);
-    setTargetColumn(columnId);
-    setModalOpen(true);
-  };
+  // ── Kapasite Hesabı ───────────────────────────────────────────
+  const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
 
-  const handleOpenEditModal = (gorev: Gorev) => {
-    setSelectedGorev(gorev);
-    setTargetColumn(undefined);
-    setModalOpen(true);
-  };
+  const kritikBugun = useMemo(
+    () => gorevler.filter(g => !g.archived && g.planlanan_tarih === todayStr && g.oncelik === "Yüksek").length,
+    [gorevler, todayStr]
+  );
 
+  const kapasite = Math.min((kritikBugun / KAPASITE_MAX) * 100, 100);
+  const kapasiteDolu = kritikBugun >= KAPASITE_MAX;
+
+  const kapasiteRenk = useMemo(() => {
+    if (kapasite >= 100) return { bar: "bg-rose-500",   text: "text-rose-400",   border: "border-rose-500/30",   bg: "bg-rose-500/5" };
+    if (kapasite >= 67)  return { bar: "bg-amber-500",  text: "text-amber-400",  border: "border-amber-500/30",  bg: "bg-amber-500/5" };
+    if (kapasite >= 34)  return { bar: "bg-yellow-400", text: "text-yellow-400", border: "border-yellow-500/20", bg: "bg-yellow-500/5" };
+    return                      { bar: "bg-emerald-500",text: "text-emerald-400",border: "border-emerald-500/20",bg: "bg-emerald-500/5" };
+  }, [kapasite]);
+
+  // ── Görev CRUD ────────────────────────────────────────────────
   const handleSaveGorev = async (formData: any) => {
     try {
-      if (formData.id) {
-        await updateGorev(formData.id, formData);
-      } else {
-        await addGorev(formData);
-      }
+      if (formData.id) await updateGorev(formData.id, formData);
+      else              await addGorev(formData);
       setModalOpen(false);
       loadData();
     } catch (e: any) {
-      const msg = e?.message || e?.details || JSON.stringify(e) || "Bilinmeyen hata";
-      alert("Görev kaydedilemedi: " + msg);
+      alert("Görev kaydedilemedi: " + (e?.message || String(e)));
     }
   };
 
   const handleDeleteGorev = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (window.confirm("Bu görevi silmek istediğinizden emin misiniz?")) {
-      try {
-        await deleteGorev(id);
-        loadData();
-      } catch (e: any) {
-        alert("Görev silinemedi: " + (e?.message || e?.details || String(e)));
-      }
+    if (!window.confirm("Bu görevi kalıcı olarak silmek istediğinizden emin misiniz?")) return;
+    try {
+      await deleteGorev(id);
+      loadData();
+    } catch (e: any) {
+      alert("Görev silinemedi: " + (e?.message || String(e)));
     }
   };
 
-  // SÜRÜKLE BIRAK (DRAG AND DROP)
+  const handleArchiveToggle = async (e: React.MouseEvent, gorev: Gorev) => {
+    e.stopPropagation();
+    try {
+      const newArchived = !gorev.archived;
+      // Optimistic update
+      setGorevler(prev => prev.map(g => g.id === gorev.id ? { ...g, archived: newArchived } : g));
+      await updateGorev(gorev.id, { archived: newArchived } as any);
+    } catch (e: any) {
+      alert("Arşiv durumu güncellenemedi: " + (e?.message || String(e)));
+      loadData();
+    }
+  };
+
+  // ── Drag & Drop ───────────────────────────────────────────────
   const handleDragStart = (e: React.DragEvent, id: string) => {
     setDraggedTaskId(id);
     e.dataTransfer.setData("text/plain", id);
-    // Drag opacity efekti
     setTimeout(() => {
-      const element = document.getElementById(`task-card-${id}`);
-      if (element) element.style.opacity = "0.4";
+      const el = document.getElementById(`task-${id}`);
+      if (el) el.style.opacity = "0.4";
     }, 0);
   };
 
   const handleDragEnd = (id: string) => {
     setDraggedTaskId(null);
-    setDraggedOverColumn(null);
-    const element = document.getElementById(`task-card-${id}`);
-    if (element) element.style.opacity = "1";
+    setDragOverColumn(null);
+    const el = document.getElementById(`task-${id}`);
+    if (el) el.style.opacity = "1";
   };
 
-  const handleDragOver = (e: React.DragEvent, columnId: string) => {
-    e.preventDefault();
-    if (draggedOverColumn !== columnId) {
-      setDraggedOverColumn(columnId);
-    }
-  };
-
-  const handleDrop = async (e: React.DragEvent, targetColumnId: string) => {
+  const handleDrop = async (e: React.DragEvent, colId: string) => {
     e.preventDefault();
     const taskId = e.dataTransfer.getData("text/plain") || draggedTaskId;
-    setDraggedOverColumn(null);
-    
+    setDragOverColumn(null);
     if (!taskId) return;
-    
     const task = gorevler.find(g => g.id === taskId);
-    if (!task || task.sutun_durumu === targetColumnId) return;
-
+    if (!task || task.sutun_durumu === colId) return;
     try {
-      // Yerel state güncellemesi (Anında hissettirmek için)
-      setGorevler(prev => prev.map(g => g.id === taskId ? { ...g, sutun_durumu: targetColumnId as any } : g));
-      await updateGorev(taskId, { sutun_durumu: targetColumnId as any });
+      setGorevler(prev => prev.map(g => g.id === taskId ? { ...g, sutun_durumu: colId as any } : g));
+      await updateGorev(taskId, { sutun_durumu: colId as any });
     } catch (e: any) {
-      alert("Durum güncellenemedi: " + (e?.message || e?.details || String(e)));
+      alert("Taşıma başarısız: " + (e?.message || String(e)));
       loadData();
     }
   };
 
-  // BUTONLA DURUM DEĞİŞTİRME (YAĞ GİBİ AKITAN YÖNLER)
-  const moveTask = async (id: string, direction: "left" | "right") => {
+  const moveTask = async (id: string, dir: "left" | "right") => {
     const task = gorevler.find(g => g.id === id);
     if (!task) return;
-    
-    const currentIndex = SUTUNLAR.findIndex(s => s.id === task.sutun_durumu);
-    let nextIndex = currentIndex + (direction === "right" ? 1 : -1);
-    
-    if (nextIndex < 0 || nextIndex >= SUTUNLAR.length) return;
-    
-    const nextStatus = SUTUNLAR[nextIndex].id;
-
+    const idx = SUTUNLAR.findIndex(s => s.id === task.sutun_durumu);
+    const next = idx + (dir === "right" ? 1 : -1);
+    if (next < 0 || next >= SUTUNLAR.length) return;
+    const nextStatus = SUTUNLAR[next].id;
     try {
-      // Yerel state güncellemesi
       setGorevler(prev => prev.map(g => g.id === id ? { ...g, sutun_durumu: nextStatus as any } : g));
       await updateGorev(id, { sutun_durumu: nextStatus as any });
     } catch (e: any) {
-      alert("Durum güncellenemedi: " + (e?.message || e?.details || String(e)));
+      alert("Taşıma başarısız: " + (e?.message || String(e)));
       loadData();
     }
   };
 
-  // PROJE ADINI ALMA
-  const getProjectTitle = (projeId: string | null) => {
-    if (!projeId) return null;
-    const proj = projects.find(p => p.id === projeId);
-    return proj ? proj.title : "Bilinmeyen Proje";
+  // ── Inbox ─────────────────────────────────────────────────────
+  const handleInboxAdd = () => {
+    if (!inboxInput.trim()) return;
+    addInboxItem(inboxInput);
+    setInboxInput("");
+    setInboxSaved(true);
+    setTimeout(() => setInboxSaved(false), 1200);
   };
 
-  // FİLTRELEME
-  const filteredGorevler = gorevler.filter(g => {
-    const matchesSearch = g.gorev_adi.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          (g.detay || "").toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesKategori = kategoriFilter === "all" || g.kategori === kategoriFilter;
-    const matchesOncelik = oncelikFilter === "all" || g.oncelik === oncelikFilter;
-    return matchesSearch && matchesKategori && matchesOncelik;
-  });
+  const handleConvertInboxItem = async (item: InboxItem) => {
+    try {
+      await addGorev({
+        gorev_adi: item.text,
+        detay: null,
+        kategori: "Kişisel / Rutin",
+        sutun_durumu: "Yapılmayı Bekleyenler",
+        planlanan_tarih: todayStr,
+        oncelik: "Orta",
+        proje_id: null,
+      });
+      deleteInboxItem(item.id);
+      loadData();
+    } catch (e: any) {
+      alert("Karta dönüştürülemedi: " + (e?.message || String(e)));
+    }
+  };
 
+  // ── Filtreleme ────────────────────────────────────────────────
+  const getProjectTitle = (id: string | null) => {
+    if (!id) return null;
+    return projects.find(p => p.id === id)?.title ?? "Bilinmeyen Proje";
+  };
+
+  const filteredGorevler = useMemo(() => {
+    return gorevler.filter(g => {
+      if (showArchived ? !g.archived : g.archived) return false;
+      const matchSearch = g.gorev_adi.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          (g.detay || "").toLowerCase().includes(searchQuery.toLowerCase());
+      const matchKategori = kategoriFilter === "all" || g.kategori === kategoriFilter;
+      const matchOncelik  = oncelikFilter  === "all" || g.oncelik  === oncelikFilter;
+      return matchSearch && matchKategori && matchOncelik;
+    });
+  }, [gorevler, showArchived, searchQuery, kategoriFilter, oncelikFilter]);
+
+  const archivedCount = useMemo(() => gorevler.filter(g => g.archived).length, [gorevler]);
+
+  // ── Render ────────────────────────────────────────────────────
   return (
     <AuthenticatedLayout>
-      <div className="flex flex-col gap-6">
-        
-        {/* Üst Sayfa Başlığı */}
-        <div className="flex justify-between items-center flex-wrap gap-4">
-          <div>
-            <h1 className="text-2xl font-black">Gündelik Plan (Kanban)</h1>
-            <p className="text-xs text-slate-400">Günlük mikro görevlerinizi ve bağımsız rutinlerinizi planlayın</p>
-          </div>
+      <div className="flex flex-col gap-5">
 
-          <button 
-            onClick={() => handleOpenAddModal()}
-            className="btn btn-primary bg-blue-600 hover:bg-blue-700 flex gap-2 items-center text-xs cursor-pointer transition-all duration-300 ease-[0.16,1,0.3,1]"
-          >
-            <Plus size={14} strokeWidth={1.5} /> Yeni Görev Ekle
-          </button>
+        {/* ── Başlık Satırı ─────────────────────────────────── */}
+        <div className="flex justify-between items-center flex-wrap gap-3">
+          <div>
+            <h1 className="text-2xl font-black">Gündelik Plan</h1>
+            <p className="text-xs text-slate-400">Görevlerini sürükle-bırak ile yönet, arşivle, plana al</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {/* Arşiv Toggle */}
+            <button
+              onClick={() => setShowArchived(v => !v)}
+              className={`flex items-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                showArchived
+                  ? "bg-slate-700/60 border-slate-600/40 text-slate-200"
+                  : "bg-slate-900/60 border-slate-800/60 text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              {showArchived ? <ArchiveRestore size={13} /> : <Archive size={13} />}
+              {showArchived ? "Aktif Görevler" : `Arşiv${archivedCount > 0 ? ` (${archivedCount})` : ""}`}
+            </button>
+
+            {/* Inbox Toggle */}
+            <button
+              onClick={() => setShowInbox(v => !v)}
+              className={`flex items-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                showInbox
+                  ? "bg-amber-600/20 border-amber-500/30 text-amber-300"
+                  : "bg-slate-900/60 border-slate-800/60 text-slate-400 hover:text-amber-400 hover:border-amber-500/20"
+              }`}
+            >
+              <Inbox size={13} />
+              Inbox{inboxItems.length > 0 && <span className="ml-0.5 bg-amber-500 text-white rounded-full text-[9px] font-black px-1.5 py-0.5">{inboxItems.length}</span>}
+            </button>
+
+            <button
+              onClick={() => { setSelectedGorev(null); setTargetColumn(undefined); setModalOpen(true); }}
+              className="btn btn-primary bg-blue-600 hover:bg-blue-700 flex gap-2 items-center text-xs cursor-pointer"
+            >
+              <Plus size={14} /> Yeni Görev
+            </button>
+          </div>
         </div>
 
-        {/* Filtreleme Paneli */}
-        <div className="glass-card flex flex-wrap gap-4 items-center">
-          {/* Arama Barı */}
-          <div className="relative flex-1 min-w-[200px]">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
-              <Search size={14} />
-            </span>
+        {/* ── 1. KAPASİTE BARI ──────────────────────────────── */}
+        {!showArchived && (
+          <div className={`glass-card border transition-all duration-500 ${kapasiteDolu ? kapasiteRenk.border + " " + kapasiteRenk.bg : "border-slate-800/40"}`}>
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-2.5">
+                <div className={`p-2 rounded-xl border ${kapasiteRenk.border} ${kapasiteRenk.bg}`}>
+                  <Brain size={14} className={kapasiteRenk.text} />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                    Günlük Kapasite
+                    {kapasiteDolu && (
+                      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md border ${kapasiteRenk.border} ${kapasiteRenk.bg} ${kapasiteRenk.text} flex items-center gap-1 animate-pulse`}>
+                        <AlertTriangle size={9} /> DOLU
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">
+                    {kapasiteDolu
+                      ? "Bugün için kritik görev sınırına ulaştın — zihinsel yük yönetimi için yeni kritik görev ekleme."
+                      : `Bugün ${KAPASITE_MAX - kritikBugun} kritik görev kapasiten daha var.`}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 min-w-[180px] flex-1 max-w-xs">
+                <div className="flex-1 h-2 bg-slate-950/60 rounded-full overflow-hidden border border-slate-800/40">
+                  <div
+                    className={`h-full rounded-full transition-all duration-700 ease-out ${kapasiteRenk.bar} ${kapasiteDolu ? "animate-pulse" : ""}`}
+                    style={{ width: `${kapasite}%` }}
+                  />
+                </div>
+                <span className={`text-xs font-black whitespace-nowrap tabular-nums ${kapasiteRenk.text}`}>
+                  {kritikBugun} / {KAPASITE_MAX}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── 2. INBOX PANELİ ──────────────────────────────── */}
+        {showInbox && (
+          <div className="glass-card border border-amber-500/20 bg-amber-500/5 flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-amber-300 flex items-center gap-2">
+                <Zap size={13} className="text-amber-400" />
+                Hızlı Fikir Kutusu — Inbox
+              </h3>
+              <span className="text-[9px] text-amber-500/70 font-semibold">
+                Enter ile ekle · Karta dönüştür
+              </span>
+            </div>
+
+            {/* Hızlı input */}
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={inboxInput}
+                  onChange={e => setInboxInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") handleInboxAdd(); }}
+                  placeholder="Aklına gelen bir şey... (Enter ile kaydet)"
+                  className="w-full bg-slate-950/60 border border-amber-500/20 focus:border-amber-500/50 rounded-xl px-3 py-2.5 text-xs text-slate-200 placeholder:text-slate-600 outline-none transition-all pr-9"
+                  autoFocus
+                />
+                {inboxSaved ? (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-400 text-[10px] font-black animate-pulse">✓</span>
+                ) : (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 text-[10px] font-bold">↵</span>
+                )}
+              </div>
+              <button
+                onClick={handleInboxAdd}
+                className="px-3 py-2 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 rounded-xl text-amber-400 text-xs font-bold transition-all cursor-pointer"
+              >
+                <Plus size={14} />
+              </button>
+            </div>
+
+            {/* Inbox Listesi */}
+            {inboxItems.length === 0 ? (
+              <p className="text-[10px] text-slate-600 italic text-center py-3">Inbox boş — yukarıdan not ekle</p>
+            ) : (
+              <div className="flex flex-col gap-1.5 max-h-52 overflow-y-auto pr-1">
+                {inboxItems.map(item => (
+                  <div key={item.id} className="flex items-center gap-2 p-2.5 bg-slate-950/40 border border-slate-800/50 rounded-xl group/inbox hover:border-amber-500/20 transition-all">
+                    <span className="flex-1 text-xs text-slate-300 truncate">{item.text}</span>
+                    <span className="text-[9px] text-slate-600 shrink-0">
+                      {new Date(item.created_at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                    <button
+                      onClick={() => handleConvertInboxItem(item)}
+                      className="shrink-0 text-[9px] font-bold px-2 py-1 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-400 rounded-lg transition-all cursor-pointer opacity-0 group-hover/inbox:opacity-100"
+                      title="Göreve Dönüştür"
+                    >
+                      → Kart
+                    </button>
+                    <button
+                      onClick={() => deleteInboxItem(item.id)}
+                      className="shrink-0 p-0.5 text-slate-600 hover:text-red-400 rounded transition-all cursor-pointer opacity-0 group-hover/inbox:opacity-100"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Filtre Paneli ────────────────────────────────── */}
+        <div className="glass-card flex flex-wrap gap-3 items-center">
+          <div className="relative flex-1 min-w-[180px]">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
               type="text"
-              placeholder="Görev adı veya notlarda ara..."
-              className="w-full pl-9 pr-4 py-2 bg-slate-950/60 border border-slate-800/60 focus:border-blue-500/50 rounded-xl outline-none text-xs text-slate-200"
+              placeholder="Görev ara..."
+              className="w-full pl-8 pr-3 py-2 bg-slate-950/60 border border-slate-800/60 focus:border-blue-500/50 rounded-xl outline-none text-xs text-slate-200"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={e => setSearchQuery(e.target.value)}
             />
           </div>
-
-          {/* Kategori Filtresi */}
           <select
-            className="w-44 bg-slate-950/60 border border-slate-800/60 rounded-xl outline-none text-xs text-slate-200 px-3 py-2 cursor-pointer focus:border-blue-500/50"
+            className="bg-slate-950/60 border border-slate-800/60 rounded-xl outline-none text-xs text-slate-200 px-3 py-2 cursor-pointer focus:border-blue-500/50"
             value={kategoriFilter}
-            onChange={(e) => setKategoriFilter(e.target.value)}
+            onChange={e => setKategoriFilter(e.target.value)}
           >
             <option value="all">Tüm Kategoriler</option>
             <option value="Prodüksiyon">Prodüksiyon</option>
@@ -252,12 +434,10 @@ export default function DailyPlanPage() {
             <option value="Vize">Vize</option>
             <option value="Kişisel / Rutin">Kişisel / Rutin</option>
           </select>
-
-          {/* Öncelik Filtresi */}
           <select
-            className="w-40 bg-slate-950/60 border border-slate-800/60 rounded-xl outline-none text-xs text-slate-200 px-3 py-2 cursor-pointer focus:border-blue-500/50"
+            className="bg-slate-950/60 border border-slate-800/60 rounded-xl outline-none text-xs text-slate-200 px-3 py-2 cursor-pointer focus:border-blue-500/50"
             value={oncelikFilter}
-            onChange={(e) => setOncelikFilter(e.target.value)}
+            onChange={e => setOncelikFilter(e.target.value)}
           >
             <option value="all">Tüm Öncelikler</option>
             <option value="Düşük">Düşük</option>
@@ -266,188 +446,175 @@ export default function DailyPlanPage() {
           </select>
         </div>
 
-        {/* KANBAN BOARD - Single Page layout grid (Cols are side-by-side on desktop without scroll) */}
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-5 min-h-[60vh]">
+        {/* ── 3. KANBAN BOARD ──────────────────────────────── */}
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 min-h-[55vh]">
           {SUTUNLAR.map(column => {
             const columnTasks = filteredGorevler.filter(g => g.sutun_durumu === column.id);
-            const isOver = draggedOverColumn === column.id;
+            const isOver      = dragOverColumn === column.id;
 
             return (
-              <div 
+              <div
                 key={column.id}
-                onDragOver={(e) => handleDragOver(e, column.id)}
-                onDrop={(e) => handleDrop(e, column.id)}
-                className={`flex flex-col gap-4 bg-slate-900/20 border rounded-2xl p-4.5 transition-all duration-300 ease-[0.16,1,0.3,1] ${
-                  isOver 
-                    ? "border-blue-500/50 bg-blue-500/5 shadow-lg shadow-blue-500/5" 
-                    : "border-slate-800/40"
+                onDragOver={e => { e.preventDefault(); setDragOverColumn(column.id); }}
+                onDragLeave={() => setDragOverColumn(null)}
+                onDrop={e => handleDrop(e, column.id)}
+                className={`flex flex-col gap-3 bg-slate-900/20 border rounded-2xl p-3.5 transition-all duration-300 ${
+                  isOver ? "border-blue-500/50 bg-blue-500/5 shadow-lg shadow-blue-500/5" : "border-slate-800/40"
                 }`}
-                style={{
-                  boxShadow: isOver ? `0 10px 30px -10px ${column.glow}` : "none"
-                }}
+                style={{ boxShadow: isOver ? `0 10px 30px -10px ${column.glow}` : "none" }}
               >
                 {/* Sütun Başlığı */}
                 <div className="flex justify-between items-center pb-2 border-b border-slate-800/30">
                   <div className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full bg-gradient-to-r ${column.color}`}></span>
-                    <span className="text-xs font-bold text-slate-200">{column.label}</span>
+                    <span className={`w-1.5 h-1.5 rounded-full bg-gradient-to-r ${column.color}`} />
+                    <span className="text-xs font-bold text-slate-200 hidden lg:block">{column.label}</span>
+                    <span className="text-xs font-bold text-slate-200 lg:hidden">{column.short}</span>
                   </div>
                   <span className="px-2 py-0.5 rounded-md bg-slate-800/60 text-slate-400 text-[10px] font-bold">
                     {columnTasks.length}
                   </span>
                 </div>
 
-                {/* Sütun Kartları Listesi */}
-                <div className="flex flex-col gap-3 overflow-y-auto flex-1 max-h-[60vh] pr-1 scrollbar-none min-h-[250px]">
+                {/* Kartlar */}
+                <div className="flex flex-col gap-2.5 overflow-y-auto flex-1 max-h-[55vh] pr-0.5 scrollbar-none min-h-[200px]">
                   {columnTasks.length === 0 ? (
-                    <div className="flex-1 flex flex-col justify-center items-center py-12 text-slate-600 text-center border border-dashed border-slate-800/40 rounded-xl">
+                    <div className="flex-1 flex flex-col justify-center items-center py-10 text-slate-700 border border-dashed border-slate-800/40 rounded-xl text-center">
                       <Clock size={16} strokeWidth={1.5} className="mb-2 opacity-50" />
-                      <span className="text-[10px] font-semibold">Görev Yok</span>
+                      <span className="text-[10px] font-semibold">Görev yok</span>
                     </div>
                   ) : (
-                    columnTasks.map((task) => {
-                      const catStyle = KATEGORI_COLORS[task.kategori] || { bg: "bg-slate-500/10", text: "text-slate-400", border: "border-slate-500/20" };
-                      const priorityStyle = ONCELIK_COLORS[task.oncelik] || { bg: "bg-slate-800 text-slate-400", text: "text-slate-400" };
-                      const hasProject = !!task.proje_id;
-                      
-                      // Calculate checklist progress
-                      const totalChecklist = task.checklist?.length || 0;
-                      const completedChecklist = task.checklist?.filter(item => item.completed).length || 0;
-                      const isChecklistDone = totalChecklist > 0 && totalChecklist === completedChecklist;
+                    columnTasks.map(task => {
+                      const cat  = KATEGORI_COLORS[task.kategori] ?? { bg: "bg-slate-500/10", text: "text-slate-400", border: "border-slate-500/20" };
+                      const totalCL     = task.checklist?.length ?? 0;
+                      const doneCL      = task.checklist?.filter(i => i.completed).length ?? 0;
+                      const clDone      = totalCL > 0 && totalCL === doneCL;
+                      const isToday     = task.planlanan_tarih === todayStr;
+                      const isOverdue   = !task.archived && task.planlanan_tarih < todayStr && column.id !== "Tamamlandı";
 
                       return (
                         <div
                           key={task.id}
-                          id={`task-card-${task.id}`}
+                          id={`task-${task.id}`}
                           draggable
-                          onDragStart={(e) => handleDragStart(e, task.id)}
+                          onDragStart={e => handleDragStart(e, task.id)}
                           onDragEnd={() => handleDragEnd(task.id)}
-                          onClick={() => handleOpenEditModal(task)}
-                          className="p-4 bg-slate-900 border border-slate-800/60 hover:border-slate-700/50 rounded-xl flex flex-col gap-3 group relative cursor-grab active:cursor-grabbing transition-all duration-300 ease-[0.16,1,0.3,1] shadow-sm hover:shadow-md"
+                          onClick={() => { setSelectedGorev(task); setTargetColumn(undefined); setModalOpen(true); }}
+                          className={`p-3.5 border rounded-xl flex flex-col gap-2.5 group relative cursor-grab active:cursor-grabbing transition-all duration-200 shadow-sm hover:shadow-md hover:border-slate-700/60 ${
+                            isOverdue
+                              ? "bg-red-950/10 border-red-500/15 hover:border-red-500/25"
+                              : "bg-slate-900 border-slate-800/60"
+                          }`}
                         >
-                          {/* Üst Kısım: Kategori ve Hızlı İşlemler */}
+                          {/* Kategori + Aksiyon butonları */}
                           <div className="flex justify-between items-center">
-                            <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded border ${catStyle.bg} ${catStyle.text} ${catStyle.border}`}>
+                            <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border ${cat.bg} ${cat.text} ${cat.border}`}>
                               {task.kategori}
                             </span>
-                            
-                            {/* Silme Butonu (Hover'da gözükür) */}
-                            <button
-                              onClick={(e) => handleDeleteGorev(e, task.id)}
-                              className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-500 hover:text-red-400 rounded transition-all duration-300 cursor-pointer"
-                              title="Sil"
-                            >
-                              <Trash2 size={12} strokeWidth={1.5} />
-                            </button>
-                          </div>
-
-                          {/* Başlık ve Detay */}
-                          <div className="flex flex-col gap-1">
-                            <div className="flex items-start gap-1.5">
-                              {/* Tamamlandı Sütunu için Check İkonu */}
-                              {column.id === "Tamamlandı" && (
-                                <CheckCircle2 size={12} className="text-emerald-550 shrink-0 mt-0.5" />
-                              )}
-                              <h4 className="font-bold text-xs text-slate-200 leading-snug group-hover:text-blue-400 transition-colors duration-300 ease-[0.16,1,0.3,1]">
-                                {task.gorev_adi}
-                              </h4>
+                            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all duration-200">
+                              {/* Arşivle / Geri Al */}
+                              <button
+                                onClick={e => handleArchiveToggle(e, task)}
+                                className={`p-0.5 rounded transition-all cursor-pointer ${
+                                  task.archived
+                                    ? "text-emerald-400 hover:text-emerald-300"
+                                    : "text-slate-500 hover:text-amber-400"
+                                }`}
+                                title={task.archived ? "Arşivden Çıkar" : "Arşivle"}
+                              >
+                                {task.archived ? <ArchiveRestore size={11} /> : <Archive size={11} />}
+                              </button>
+                              {/* Sil */}
+                              <button
+                                onClick={e => handleDeleteGorev(e, task.id)}
+                                className="p-0.5 text-slate-500 hover:text-red-400 rounded transition-all cursor-pointer"
+                                title="Kalıcı Sil"
+                              >
+                                <Trash2 size={11} strokeWidth={1.5} />
+                              </button>
                             </div>
-                            {task.detay && (
-                              <p className="text-[10px] text-slate-400 leading-relaxed line-clamp-2">
-                                {task.detay}
-                              </p>
-                            )}
                           </div>
 
-                          {/* Checklist & Comments Badges (Trello style) */}
-                          {((task.checklist && task.checklist.length > 0) || (task.comments && task.comments.length > 0)) && (
-                            <div className="flex flex-wrap gap-2 mt-1">
-                              {task.checklist && task.checklist.length > 0 && (() => {
-                                return (
-                                  <span className={`inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border transition-all ${
-                                    isChecklistDone 
-                                      ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 font-extrabold" 
-                                      : "bg-slate-950/40 border-slate-800/40 text-slate-400"
-                                  }`} title="Kontrol Listesi">
-                                    <CheckSquare size={10} className="shrink-0" />
-                                    {completedChecklist}/{totalChecklist}
-                                  </span>
-                                );
-                              })()}
+                          {/* Başlık */}
+                          <div className="flex items-start gap-1.5">
+                            {column.id === "Tamamlandı" && (
+                              <CheckCircle2 size={11} className="text-emerald-500 shrink-0 mt-0.5" />
+                            )}
+                            <h4 className="font-bold text-xs text-slate-200 leading-snug group-hover:text-blue-400 transition-colors">
+                              {task.gorev_adi}
+                            </h4>
+                          </div>
 
-                              {task.comments && task.comments.length > 0 && (
-                                <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border bg-slate-950/40 border-slate-800/40 text-slate-400" title="Yorumlar">
-                                  <MessageSquare size={10} className="shrink-0" />
-                                  {task.comments.length}
+                          {/* Checklist & Yorum rozetleri */}
+                          {((task.checklist?.length ?? 0) > 0 || (task.comments?.length ?? 0) > 0) && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {totalCL > 0 && (
+                                <span className={`inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border ${
+                                  clDone ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : "bg-slate-950/40 border-slate-800/40 text-slate-400"
+                                }`}>
+                                  <CheckSquare size={9} /> {doneCL}/{totalCL}
+                                </span>
+                              )}
+                              {(task.comments?.length ?? 0) > 0 && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border bg-slate-950/40 border-slate-800/40 text-slate-400">
+                                  <MessageSquare size={9} /> {task.comments!.length}
                                 </span>
                               )}
                             </div>
                           )}
 
-                          {/* Alt Bölüm: Proje, Tarih ve Yön Butonları */}
-                          <div className="flex flex-col gap-2 pt-2 border-t border-slate-800/40">
-                            {/* Bağlantılı Proje */}
-                            {hasProject && (
-                              <div className="flex items-center gap-1 text-[9px] text-slate-400 font-semibold bg-blue-500/5 border border-blue-500/10 px-1.5 py-0.5 rounded truncate">
-                                <Briefcase size={10} className="text-blue-500 shrink-0" />
+                          {/* Alt meta: Proje, Tarih, Öncelik */}
+                          <div className="flex flex-col gap-1.5 pt-2 border-t border-slate-800/40">
+                            {task.proje_id && (
+                              <div className="flex items-center gap-1 text-[9px] text-slate-400 bg-blue-500/5 border border-blue-500/10 px-1.5 py-0.5 rounded truncate">
+                                <Briefcase size={9} className="text-blue-500 shrink-0" />
                                 <span className="truncate">{getProjectTitle(task.proje_id)}</span>
                               </div>
                             )}
-
-                            {/* Tarih ve Öncelik */}
                             <div className="flex justify-between items-center text-[9px] text-slate-500 font-semibold">
-                              <div className="flex items-center gap-1">
-                                <Calendar size={11} strokeWidth={1.5} />
-                                <span>{task.planlanan_tarih}</span>
-                              </div>
-                              <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold ${priorityStyle.bg}`}>
+                              <span className={`flex items-center gap-1 ${isOverdue ? "text-red-400 font-bold" : isToday ? "text-blue-400 font-bold" : ""}`}>
+                                <Calendar size={10} strokeWidth={1.5} />
+                                {task.planlanan_tarih}
+                                {isOverdue && " ⚠"}
+                              </span>
+                              <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold ${ONCELIK_COLORS[task.oncelik]}`}>
                                 {task.oncelik}
                               </span>
                             </div>
 
-                            {/* Trello Yön Tuşları */}
-                            <div className="flex justify-between items-center border-t border-slate-800/30 pt-2 mt-1 opacity-0 group-hover:opacity-100 transition-all duration-300">
+                            {/* Taşı ← → butonları */}
+                            <div className="flex justify-between items-center pt-1.5 border-t border-slate-800/30 opacity-0 group-hover:opacity-100 transition-all">
                               <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  moveTask(task.id, "left");
-                                }}
+                                onClick={e => { e.stopPropagation(); moveTask(task.id, "left"); }}
                                 disabled={task.sutun_durumu === SUTUNLAR[0].id}
-                                className="p-1 rounded bg-slate-950/60 hover:bg-slate-800 border border-slate-800/40 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-all"
-                                title="Önceki Sütuna Taşı"
+                                className="p-1 rounded bg-slate-950/60 hover:bg-slate-800 border border-slate-800/40 text-slate-400 hover:text-white disabled:opacity-25 disabled:cursor-not-allowed cursor-pointer transition-all"
                               >
-                                <ChevronLeft size={11} strokeWidth={2} />
+                                <ChevronLeft size={10} strokeWidth={2} />
                               </button>
-
                               <span className="text-[8px] text-slate-600 font-bold uppercase tracking-wider">Taşı</span>
-
                               <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  moveTask(task.id, "right");
-                                }}
+                                onClick={e => { e.stopPropagation(); moveTask(task.id, "right"); }}
                                 disabled={task.sutun_durumu === SUTUNLAR[SUTUNLAR.length - 1].id}
-                                className="p-1 rounded bg-slate-950/60 hover:bg-slate-800 border border-slate-800/40 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-all"
-                                title="Sonraki Sütuna Taşı"
+                                className="p-1 rounded bg-slate-950/60 hover:bg-slate-800 border border-slate-800/40 text-slate-400 hover:text-white disabled:opacity-25 disabled:cursor-not-allowed cursor-pointer transition-all"
                               >
-                                <ChevronRight size={11} strokeWidth={2} />
+                                <ChevronRight size={10} strokeWidth={2} />
                               </button>
                             </div>
                           </div>
-
                         </div>
                       );
                     })
                   )}
                 </div>
 
-                {/* Sütun Altı Hızlı Ekle Butonu */}
-                <button
-                  onClick={() => handleOpenAddModal(column.id)}
-                  className="w-full py-2 bg-slate-950/20 hover:bg-slate-950/50 border border-dashed border-slate-800/60 hover:border-blue-500/25 rounded-xl text-[10px] text-slate-400 hover:text-blue-400 font-bold flex justify-center items-center gap-1.5 transition-all duration-300 ease-[0.16,1,0.3,1] cursor-pointer"
-                >
-                  <Plus size={11} strokeWidth={1.5} /> Hızlı Görev Ekle
-                </button>
+                {/* Sütun altı Hızlı Ekle */}
+                {!showArchived && (
+                  <button
+                    onClick={() => { setSelectedGorev(null); setTargetColumn(column.id); setModalOpen(true); }}
+                    className="w-full py-2 bg-slate-950/20 hover:bg-slate-950/50 border border-dashed border-slate-800/60 hover:border-blue-500/25 rounded-xl text-[10px] text-slate-500 hover:text-blue-400 font-bold flex justify-center items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <Plus size={10} /> Hızlı Ekle
+                  </button>
+                )}
               </div>
             );
           })}
@@ -455,7 +622,7 @@ export default function DailyPlanPage() {
 
       </div>
 
-      {/* Slide-over Form Modalı */}
+      {/* Görev Modalı */}
       {modalOpen && (
         <GorevModal
           isOpen={modalOpen}
