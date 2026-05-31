@@ -177,7 +177,7 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-950">
+    <div className="min-h-screen flex flex-col bg-slate-950 overflow-x-hidden w-full max-w-full relative">
       
       {/* 1. ÜST BAR (TOPBAR) */}
       <header className="sticky top-0 z-40 flex items-center justify-between px-6 py-4 bg-slate-900/70 dark:bg-zinc-900/70 backdrop-blur-md border-b border-slate-800/40">
@@ -287,7 +287,7 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
 
       {/* 2. DEMO MOD BANNER'I */}
       {isDemo && (
-        <div className="bg-gradient-to-r from-amber-500/10 to-blue-500/5 border-b border-amber-500/20 px-6 py-2 flex items-center gap-2 text-xs text-amber-400 z-30">
+        <div className="bg-gradient-to-r from-amber-500/10 to-blue-500/5 border-b border-amber-500/20 px-4 sm:px-6 py-2 flex flex-wrap sm:flex-nowrap items-center gap-2 text-xs text-amber-400 z-30">
           <Info size={14} strokeWidth={1.5} className="shrink-0" />
           <span>
             <strong>Demo Modu:</strong> Çevrimdışı çalışıyorsunuz. Supabase veritabanınızı bağlamak için <code>.env.local</code> dosyasını düzenleyin ve <code>schema.sql</code> kodunu Supabase stüdyosunda çalıştırın.
@@ -361,7 +361,7 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
         )}
 
         {/* Ana İçerik Gövdesi */}
-        <main className="flex-1 p-4 sm:p-6 md:p-10 min-w-0 flex flex-col gap-8">
+        <main className="flex-1 p-4 sm:p-6 md:p-10 min-w-0 flex flex-col gap-8 overflow-x-hidden w-full max-w-full">
           {children}
         </main>
       </div>
